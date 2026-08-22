@@ -19,16 +19,22 @@ export interface ExtractReportItem {
 }
 
 /**
- * POST /api/jobs/[id]/extract — spec Part 6 extraction pass, verbatim prompt.
- * Idempotent: only applications whose cv_extractions row has skills IS NULL
- * (never extracted, or previously failed with extract_error set) are run.
- * One bad CV never aborts the batch.
+ * POST /api/jobs/[id]/extract?limit=N — spec Part 6 extraction pass, verbatim
+ * prompt. Chunked: processes at most `limit` pending CVs per call (default 3,
+ * max 10) and returns the remaining pending count, so the client loops in
+ * small bites that never hit serverless time limits. Idempotent: only
+ * applications whose cv_extractions row has skills IS NULL run; failures
+ * persist extract_error and are retried by the next chunk/click.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: jobId } = await params;
+  const limit = Math.min(
+    Math.max(Number(new URL(request.url).searchParams.get("limit")) || 3, 1),
+    10
+  );
   const supabase = await createClient();
   const {
     data: { user },
@@ -77,11 +83,13 @@ export async function POST(
   if (todo.length === 0) {
     return NextResponse.json({
       results: [] as ExtractReportItem[],
+      remaining: 0,
       message: "Nothing to extract — every CV is already processed.",
     });
   }
 
-  const results = await mapWithConcurrency(todo, CONCURRENCY, async (item) => {
+  const batch = todo.slice(0, limit);
+  const results = await mapWithConcurrency(batch, CONCURRENCY, async (item) => {
     try {
       // Spec prompt, verbatim (Part 6) — [raw_text] substituted.
       const prompt = `Extract the following from this CV text as strict JSON only, no prose:
@@ -134,5 +142,9 @@ CV text: ${item.rawText}`;
     }
   });
 
-  return NextResponse.json({ results });
+  const succeeded = results.filter((r) => r.status === "extracted").length;
+  return NextResponse.json({
+    results,
+    remaining: Math.max(todo.length - succeeded, 0),
+  });
 }

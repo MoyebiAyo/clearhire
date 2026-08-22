@@ -13,9 +13,22 @@ interface ReportItem {
   message?: string;
 }
 
+export interface RunProgress {
+  kind: "extract" | "score";
+  done: number;
+  total: number;
+}
+
+const CHUNK_SIZE = 3;
+/** Hard stop for the chunk loop (poison-CV protection is the zero-progress
+ * check below; this is a final backstop). */
+const MAX_CHUNKS = 60;
+
 /**
- * Owns the run state shared by the pipeline controls and the shortlist, so
- * the shortlist can show skeletons while a pass is in flight.
+ * Owns the run state shared by the pipeline controls and the shortlist.
+ * AI passes run in small chunks (3 CVs per request) that each finish well
+ * inside serverless limits; the client loops until `remaining` hits zero,
+ * tracking progress so the shortlist can show live status.
  */
 export function JobStage({
   jobId,
@@ -29,28 +42,57 @@ export function JobStage({
   aiConfigured: boolean;
 }) {
   const router = useRouter();
-  const [running, setRunning] = useState<"extract" | "score" | null>(null);
+  const [running, setRunning] = useState<RunProgress | null>(null);
 
   const pendingExtract = rows.filter((r) => !r.extracted).length;
   const readyToScore = rows.filter((r) => r.extracted && !r.score).length;
   const scoredCount = rows.filter((r) => r.score).length;
 
   async function run(kind: "extract" | "score") {
-    setRunning(kind);
+    const initialTotal = kind === "extract" ? pendingExtract : readyToScore;
+    setRunning({ kind, done: 0, total: initialTotal });
+
+    const allResults: ReportItem[] = [];
     try {
-      const res = await fetch(`/api/jobs/${jobId}/${kind}`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) {
-        toast.error(body.error ?? "The AI pass failed. Please try again.");
-        return;
+      for (let chunk = 0; chunk < MAX_CHUNKS; chunk++) {
+        const res = await fetch(`/api/jobs/${jobId}/${kind}?limit=${CHUNK_SIZE}`, {
+          method: "POST",
+        });
+        const body = await res.json();
+        if (!res.ok) {
+          toast.error(body.error ?? "The AI pass failed. Please try again.");
+          return;
+        }
+
+        const results = (body.results ?? []) as ReportItem[];
+        if (results.length === 0) {
+          if (allResults.length === 0) toast.info(body.message ?? "Nothing to do.");
+          break;
+        }
+
+        const okCount = results.filter((r) => r.status !== "failed").length;
+        allResults.push(...results);
+        const remaining: number = body.remaining ?? 0;
+
+        setRunning((r) =>
+          r
+            ? {
+                ...r,
+                done: r.done + okCount,
+                total: Math.max(r.done + okCount + remaining, r.total),
+              }
+            : r
+        );
+
+        if (remaining === 0) break;
+        if (okCount === 0) {
+          // A full chunk failed — stop instead of retrying forever.
+          break;
+        }
       }
-      const results = (body.results ?? []) as ReportItem[];
-      if (results.length === 0) {
-        toast.info(body.message ?? "Nothing to do.");
-        return;
-      }
-      const ok = results.filter((r) => r.status !== "failed");
-      const failed = results.filter((r) => r.status === "failed");
+
+      const ok = allResults.filter((r) => r.status !== "failed");
+      const failed = allResults.filter((r) => r.status === "failed");
       if (ok.length > 0) {
         toast.success(
           kind === "extract"
@@ -65,7 +107,9 @@ export function JobStage({
       }
       router.refresh();
     } catch {
-      toast.error("Network error — please try again.");
+      toast.error(
+        "Connection interrupted — everything done so far is saved. Click again to resume where it stopped."
+      );
     } finally {
       setRunning(null);
     }
@@ -78,7 +122,7 @@ export function JobStage({
         readyToScore={readyToScore}
         scoredCount={scoredCount}
         aiConfigured={aiConfigured}
-        running={running}
+        running={running?.kind ?? null}
         onExtract={() => run("extract")}
         onScore={() => run("score")}
       />

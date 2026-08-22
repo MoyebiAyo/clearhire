@@ -17,7 +17,10 @@ export interface ScoreReportItem {
 }
 
 /**
- * POST /api/jobs/[id]/score — spec Part 6 blind scoring pass, verbatim prompt.
+ * POST /api/jobs/[id]/score?limit=N — spec Part 6 blind scoring pass, verbatim
+ * prompt. Chunked like extract: at most `limit` candidates per call (default 3,
+ * max 10) with a `remaining` count so the client loops in serverless-safe
+ * bites.
  *
  * BLIND BOUNDARY (spec 2.2 + Part 7): the scoring payload is built
  * server-side from cv_extractions ONLY — skills, experience_years,
@@ -30,10 +33,14 @@ export interface ScoreReportItem {
  * under the job's rubric — the model never does arithmetic.
  */
 export async function POST(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: jobId } = await params;
+  const limit = Math.min(
+    Math.max(Number(new URL(request.url).searchParams.get("limit")) || 3, 1),
+    10
+  );
   const supabase = await createClient();
   const {
     data: { user },
@@ -130,6 +137,7 @@ ${job.jd_text}`,
   if (todo.length === 0) {
     return NextResponse.json({
       results: [] as ScoreReportItem[],
+      remaining: 0,
       message: "Nothing to score — run extraction first, or all CVs are scored.",
     });
   }
@@ -141,7 +149,8 @@ ${job.jd_text}`,
     tools: Number(job.weight_tools),
   };
 
-  const results = await mapWithConcurrency(todo, CONCURRENCY, async (item) => {
+  const batch = todo.slice(0, limit);
+  const results = await mapWithConcurrency(batch, CONCURRENCY, async (item) => {
     try {
       // Spec prompt, verbatim (Part 6) — placeholders substituted.
       const prompt = `Given this job's requirements: ${JSON.stringify(requirements)}
@@ -206,5 +215,9 @@ Return strict JSON:
     }
   });
 
-  return NextResponse.json({ results });
+  const succeeded = results.filter((r) => r.status === "scored").length;
+  return NextResponse.json({
+    results,
+    remaining: Math.max(todo.length - succeeded, 0),
+  });
 }

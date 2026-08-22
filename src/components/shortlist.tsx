@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { RunProgress } from "@/components/job-stage";
 import type { Gap } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
 
@@ -53,6 +54,40 @@ export interface RubricWeights {
 
 type SortKey = "total" | "skills" | "experience" | "certifications" | "tools";
 
+/** Rotating status copy while the AI works — warm, a little playful,
+ * and true to the product (blindness, rubric, no AI math). */
+const EXTRACT_LINES = [
+  "Warming up the reading lamp…",
+  "Extracting documents now…",
+  "Understanding each candidate…",
+  "Pulling out skills, tools and experience…",
+  "Fun fact: the AI never sees names — just merit.",
+  "Go on, grab a coffee — we've got this…",
+  "Almost done…",
+];
+
+const SCORE_LINES = [
+  "Scoring blind — no names, no bias…",
+  "Weighing each profile against your rubric…",
+  "Checking every requirement, one by one…",
+  "The AI loves this part…",
+  "Ranking your shortlist…",
+  "Almost there…",
+];
+
+function useRotatingLine(lines: string[], active: boolean): string {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setI(0);
+      return;
+    }
+    const t = setInterval(() => setI((v) => (v + 1) % lines.length), 2800);
+    return () => clearInterval(t);
+  }, [active, lines]);
+  return lines[i];
+}
+
 const CRITERIA: { key: Exclude<SortKey, "total">; label: string; weightKey: keyof RubricWeights }[] = [
   { key: "skills", label: "Skills", weightKey: "skills" },
   { key: "experience", label: "Experience", weightKey: "experience" },
@@ -73,13 +108,18 @@ export function Shortlist({
 }: {
   rows: ShortlistRow[];
   weights: RubricWeights;
-  busy: "extract" | "score" | null;
+  busy: RunProgress | null;
 }) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [blindMode, setBlindMode] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("total");
   const [onlyHardGaps, setOnlyHardGaps] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+
+  const busyLine = useRotatingLine(
+    busy?.kind === "score" ? SCORE_LINES : EXTRACT_LINES,
+    busy !== null
+  );
 
   /** Database reveal state AND the screen-sharing "hide identities" layer. */
   const isRevealed = (r: ShortlistRow) =>
@@ -220,11 +260,21 @@ export function Shortlist({
         <>
           {busy && (
             <div className="space-y-3" aria-live="polite">
-              <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
                 <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden />
-                {busy === "extract" ? "Extracting" : "Scoring"} candidates —
-                usually a couple of seconds per CV…
+                <span key={busyLine} className="fade-swap font-medium text-foreground">
+                  {busyLine}
+                </span>
+                <span className="tabular-nums">
+                  {busy.done} of {busy.total} done
+                </span>
               </p>
+              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-500"
+                  style={{ width: `${busy.total > 0 ? Math.min((busy.done / busy.total) * 100, 100) : 0}%` }}
+                />
+              </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <Skeleton className="h-40" />
                 <Skeleton className="h-40" />
