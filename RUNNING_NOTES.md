@@ -1,4 +1,4 @@
-# ClearHire — Running Notes (Week 1)
+# ClearHire — Running Notes (Week 1 + Week 2)
 
 Feature-by-feature walkthrough of everything built this week: where it lives,
 what it does, and how to test it. Read top-to-bottom as a tour of the app.
@@ -162,3 +162,92 @@ candidate), amber "needs email" (with an inline input + save button), or red
   weights, and stores per-criterion sub-scores + `gaps` + `rationale`.
 - The job detail page's Candidates table becomes the ranked shortlist with
   reveal-on-click.
+
+---
+
+# Week 2 — AI Pipeline (extraction + blind scoring)
+
+## Setup
+
+Set `GROQ_API_KEY` in `.env.local` (free key from
+[console.groq.com](https://console.groq.com)) and on Vercel. Optional:
+`FALLBACK_AI_BASE_URL` / `FALLBACK_AI_API_KEY` for any OpenAI-compatible
+fallback, `AI_MODEL` to override the default `llama-3.3-70b-versatile`,
+`AI_DEBUG=true` for full prompt/response logging.
+
+## What was built
+
+### lib/ai.ts — the one AI doorway
+
+Every AI call in the app goes through `chatJSON()`: OpenAI-compatible
+`/chat/completions` against Groq's base URL, **temperature 0**, **JSON mode**
+(`response_format: json_object`), 45s timeout, one retry per provider, then
+automatic failover to `FALLBACK_AI_*` if configured. `mapWithConcurrency()`
+caps batches at 4 in flight (free-tier rate-limit safety). Marked
+`server-only` — importing it from client code fails the build. No new
+dependencies: plain `fetch`.
+
+### POST /api/jobs/[id]/extract — the extraction pass
+
+- Finds applications on the job whose `cv_extractions` row has
+  `skills IS NULL` (never extracted, or previously failed — **idempotent**).
+- Calls the LLM with the spec's extraction prompt **verbatim**.
+- Response validated by zod (`parseExtraction`): arrays coerced, education
+  normalized to `{degree, institution}`, junk filtered.
+- Success → updates the same `cv_extractions` row (structured fields +
+  `extract_error = null`). Failure after retry → `extract_error` persisted,
+  skills stays NULL so re-runs retry it. One bad CV never aborts the batch.
+
+### POST /api/jobs/[id]/score — the blind scoring pass
+
+- **Requirements derivation:** one preliminary LLM call turns `jd_text` into
+  `[{requirement, type: hard|nice-to-have}]`, cached in
+  `jobs.requirements_cache` (schema extension, migration 0002) — derived once
+  per job, reused for every candidate.
+- **Blind boundary:** the scoring payload is built server-side from
+  `cv_extractions` ONLY — `skills, experience_years, certifications, tools`.
+  Name, email, education/school are never included (education is stored by
+  extraction but deliberately excluded from scoring input).
+- **Audit:** every scoring call logs
+  `[blind-audit] job=… app=… payload={…}` — inspect these lines (local
+  terminal or Vercel logs) to prove the outgoing payload contains no
+  identifying fields. This is the hackathon "evidence of testing" artifact.
+- Spec scoring prompt **verbatim**; response validated (0–100 scores, gaps
+  with hard/nice-to-have severity, rationale).
+- **`total_score` is computed in code** — weighted sum of sub-scores under
+  the job's rubric. The model never does arithmetic.
+- Idempotent: only applications with extraction done and no `scores` row run.
+
+### Migration 0002
+
+`jobs.requirements_cache jsonb`, `cv_extractions.extract_error text`, plus
+the UPDATE policies on `cv_extractions`/`scores` that Week 2+ needs
+(documented extensions, commented in the SQL).
+
+### UI — AI pipeline card + ranked results
+
+- Job page now has an **AI pipeline** card: "1. Extract skills (N pending)"
+  and "2. Score blind (N ready)" buttons with spinners, disabled states,
+  tooltips explaining each step, per-run toasts (extracted count / scored
+  count / failures with reason), and auto-refresh. Shows a friendly
+  configuration warning when `GROQ_API_KEY` is missing.
+- Candidates table is now the **ranked debug view**: scored candidates
+  sorted by total score with rank numbers, the weighted total, per-criterion
+  sub-scores (S/E/C/T), gap badges (red = hard requirement missing, grey =
+  nice-to-have, hover for the missing skill), an expandable "Why this
+  score" rationale, duplicate/extract-failed flags, and an "identities
+  visible — blinding arrives in Week 3" banner. Unscored rows sort last.
+
+## How to test (Week 2 definition of done)
+
+1. `GROQ_API_KEY` set → open a job with uploaded CVs.
+2. Click **1. Extract skills** → toast reports N extracted; Supabase →
+   `cv_extractions` now has structured fields filled.
+3. Click **2. Score blind** → toast reports N scored; table re-sorts by
+   Score with sub-scores, gap badges, and rationales. 10 CVs → 10 ranked
+   rows.
+4. **Blind audit:** check the terminal (dev) or Vercel → Logs for
+   `[blind-audit]` lines — payload shows only skills/years/certs/tools.
+5. **Idempotency:** click Extract or Score again → "Nothing to do" toast,
+   zero new rows, no duplicate scoring.
+6. Optional: `AI_DEBUG=true` for full prompts/responses during debugging.

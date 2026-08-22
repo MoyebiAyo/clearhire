@@ -28,6 +28,8 @@ export interface Job {
   weight_tools: number;
   status: JobStatus;
   created_at: string;
+  /** Cached [{requirement, type}] derived from jd_text by the LLM (Week 2). Present only when selected. */
+  requirements_cache?: { requirement: string; type: "hard" | "nice-to-have" }[] | null;
   /** Only populated by the jobs list query (count per job). */
   application_count?: number;
 }
@@ -57,11 +59,31 @@ export interface CvExtraction {
   application_id: string;
   skills: string[] | null;
   experience_years: number | null;
-  education: { degree: string; institution: string }[] | null;
+  education: { degree: string | null; institution: string | null }[] | null;
   certifications: string[] | null;
   tools: string[] | null;
   raw_text: string | null;
   extracted_at: string;
+  extract_error: string | null;
+}
+
+export interface Gap {
+  requirement: string;
+  missing_skill: string | null;
+  severity: "hard" | "nice-to-have";
+}
+
+export interface Score {
+  id: string;
+  application_id: string;
+  skills_score: number;
+  experience_score: number;
+  certifications_score: number;
+  tools_score: number;
+  total_score: number;
+  gaps: Gap[] | null;
+  rationale: string | null;
+  scored_at: string;
 }
 
 /** Per-file result returned by POST /api/jobs/[id]/cvs. */
