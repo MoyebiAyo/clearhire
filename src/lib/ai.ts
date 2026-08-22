@@ -10,7 +10,9 @@ import "server-only";
  */
 
 const DEFAULT_BASE_URL = "https://api.groq.com/openai/v1";
-const DEFAULT_MODEL = process.env.AI_MODEL ?? "llama-3.3-70b-versatile";
+// Groq's current largest instruct model (verified live: handles JSON mode +
+// the spec prompts cleanly). Override with AI_MODEL if the lineup changes.
+const DEFAULT_MODEL = process.env.AI_MODEL ?? "openai/gpt-oss-120b";
 const REQUEST_TIMEOUT_MS = 45_000;
 
 export class AiError extends Error {
