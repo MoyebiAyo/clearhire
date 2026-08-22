@@ -35,23 +35,24 @@ export async function middleware(request: NextRequest) {
 
   // Email-confirmation / OAuth callback: Supabase redirects back with
   // ?code=… (PKCE) which must be exchanged for a session server-side.
+  // Land on a confirmation page (success or "link invalid") instead of
+  // silently bouncing, so the user always gets feedback.
   const code = request.nextUrl.searchParams.get("code");
   if (code) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/dashboard";
-      url.search = "";
-      const redirect = NextResponse.redirect(url);
-      // Carry the session cookies set during the exchange onto the redirect.
-      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
-      return redirect;
-    }
+    const url = request.nextUrl.clone();
+    url.pathname = "/auth/confirmed";
+    url.search = error ? "?status=invalid" : "";
+    const redirect = NextResponse.redirect(url);
+    // Carry the session cookies set during the exchange onto the redirect.
+    response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+    return redirect;
   }
 
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&
+    !request.nextUrl.pathname.startsWith("/auth") &&
     !request.nextUrl.pathname.startsWith("/api")
   ) {
     const url = request.nextUrl.clone();
