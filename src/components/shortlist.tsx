@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   Eye,
@@ -322,9 +322,11 @@ function ShortlistCard({
         {s && (
           <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
             {CRITERIA.map(({ key, label, weightKey }) => (
-              <div key={key} title={`${label} sub-score (weight ${weights[weightKey]}%).`}>
+              <div key={key} title={`${label} sub-score, weighted ${weights[weightKey]}% in this job's rubric.`}>
                 <div className="flex items-baseline justify-between text-xs">
-                  <span className="text-muted-foreground">{label}</span>
+                  <span className="text-muted-foreground">
+                    {label} <span className="tabular-nums opacity-70">{weights[weightKey]}%</span>
+                  </span>
                   <span className="font-semibold tabular-nums">{Math.round(s[key])}</span>
                 </div>
                 <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -356,6 +358,15 @@ function ShortlistCard({
           </div>
         )}
         {s && s.gaps.length === 0 && <Badge variant="success">Meets all requirements</Badge>}
+
+        {s?.rationale && (
+          <details className="text-xs">
+            <summary className="cursor-pointer font-medium text-primary marker:content-none">
+              Why this score
+            </summary>
+            <p className="mt-1 leading-relaxed text-muted-foreground">{s.rationale}</p>
+          </details>
+        )}
 
         <div className="flex items-center gap-2 pt-1">
           <Button size="sm" variant="secondary" onClick={onReveal} disabled={revealed}>
@@ -389,6 +400,13 @@ function DetailDrawer({
   onDownload: () => void;
 }) {
   const s = row.score;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <div
       className="fixed inset-0 z-50 flex justify-end bg-foreground/30 backdrop-blur-sm"
