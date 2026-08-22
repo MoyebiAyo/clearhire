@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
+import { aiUserMessage, chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
 import { parseExtraction } from "@/lib/ai-schemas";
 import { createClient } from "@/lib/supabase/server";
 
@@ -116,16 +116,20 @@ CV text: ${item.rawText}`;
       };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      // Persist the failure for debugging; skills stays NULL so a re-run retries.
+      // Full detail to server logs only; users see a sanitized message (the
+      // raw error can contain provider org IDs and internals).
+      console.error(`[extract] app=${item.applicationId}: ${message}`);
+      // Persist the sanitized reason for debugging; skills stays NULL so a
+      // re-run retries it.
       await supabase
         .from("cv_extractions")
-        .update({ extract_error: message.slice(0, 500) })
+        .update({ extract_error: aiUserMessage(err).slice(0, 500) })
         .eq("id", item.extractionId);
       return {
         application_id: item.applicationId,
         email: item.email,
         status: "failed" as const,
-        message,
+        message: aiUserMessage(err),
       };
     }
   });

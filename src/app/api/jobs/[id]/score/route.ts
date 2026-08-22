@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
+import { aiUserMessage, chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
 import { parseRequirements, parseScoring, type Requirement } from "@/lib/ai-schemas";
 import { createClient } from "@/lib/supabase/server";
 
@@ -74,12 +74,11 @@ ${job.jd_text}`,
         .update({ requirements_cache: requirements })
         .eq("id", jobId);
     } catch (err) {
+      console.error(
+        `[score] requirements derivation failed: ${err instanceof Error ? err.message : err}`
+      );
       return NextResponse.json(
-        {
-          error: `Couldn't derive job requirements: ${
-            err instanceof Error ? err.message : "unknown error"
-          }`,
-        },
+        { error: `Couldn't derive job requirements — ${aiUserMessage(err)}` },
         { status: 502 }
       );
     }
@@ -194,11 +193,15 @@ Return strict JSON:
         total_score,
       };
     } catch (err) {
+      // Full detail to server logs only; users see a sanitized message.
+      console.error(
+        `[score] app=${item.applicationId}: ${err instanceof Error ? err.message : err}`
+      );
       return {
         application_id: item.applicationId,
         email: item.email,
         status: "failed" as const,
-        message: err instanceof Error ? err.message : "Unknown error",
+        message: aiUserMessage(err),
       };
     }
   });

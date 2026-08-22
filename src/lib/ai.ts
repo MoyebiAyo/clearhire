@@ -182,3 +182,20 @@ export function debugAI(label: string, payload: unknown): void {
     console.log(`[ai:${label}] ${JSON.stringify(payload).slice(0, 2000)}`);
   }
 }
+
+/**
+ * User-facing message for an AI failure — NEVER include provider internals
+ * (org IDs, model names, raw upstream errors); those stay in server logs.
+ */
+export function aiUserMessage(err: unknown): string {
+  if (err instanceof AiError) {
+    if (err.status === 429) {
+      return "The AI service is rate-limiting us — wait a few seconds and try again.";
+    }
+    if (err.status !== undefined && err.status >= 500) {
+      return "The AI service had a hiccup — please try again.";
+    }
+    return "The AI returned an unexpected response — please try again.";
+  }
+  return "The AI call failed — please try again.";
+}
