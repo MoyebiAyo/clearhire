@@ -20,6 +20,9 @@ npm-debug.log*
 .env.local
 .env*.local
 
+# supabase local secrets (DB password)
+.supabase-local.txt
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
