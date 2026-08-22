@@ -76,11 +76,14 @@ export function Shortlist({
   busy: "extract" | "score" | null;
 }) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
+  const [blindMode, setBlindMode] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("total");
   const [onlyHardGaps, setOnlyHardGaps] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
 
-  const isRevealed = (r: ShortlistRow) => r.revealed || revealed[r.id];
+  /** Database reveal state AND the screen-sharing "hide identities" layer. */
+  const isRevealed = (r: ShortlistRow) =>
+    !blindMode && (r.revealed || revealed[r.id]);
 
   const visible = useMemo(() => {
     let list = [...rows];
@@ -138,8 +141,22 @@ export function Shortlist({
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-2">
-            <Label htmlFor="sort" className="text-xs text-muted-foreground">
+          <button
+            type="button"
+            onClick={() => setBlindMode((v) => !v)}
+            aria-pressed={blindMode}
+            className={cn(
+              "flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+              blindMode
+                ? "border-primary/40 bg-primary-soft text-primary"
+                : "border-border bg-card text-muted-foreground hover:bg-muted"
+            )}
+            title="Blur every identity on screen without un-revealing anything — handy for screen shares and demos. Revealed candidates reappear when switched back."
+          >
+            {blindMode ? <Eye aria-hidden /> : <EyeOff aria-hidden />}
+            {blindMode ? "Identities hidden" : "Hide identities"}
+          </button>
+          <Label htmlFor="sort" className="text-xs text-muted-foreground">
               Sort by
             </Label>
             <select
@@ -155,7 +172,6 @@ export function Shortlist({
               <option value="certifications">Certifications</option>
               <option value="tools">Tools</option>
             </select>
-          </div>
           <button
             type="button"
             onClick={() => setOnlyHardGaps((v) => !v)}
@@ -222,6 +238,7 @@ export function Shortlist({
                 row={row}
                 weights={weights}
                 revealed={isRevealed(row)}
+                blindMode={blindMode}
                 onReveal={() => reveal(row)}
                 onDetails={() => setOpenId(row.id)}
                 onDownload={() => downloadCv(row)}
@@ -254,6 +271,7 @@ function ShortlistCard({
   row,
   weights,
   revealed,
+  blindMode,
   onReveal,
   onDetails,
   onDownload,
@@ -261,6 +279,7 @@ function ShortlistCard({
   row: ShortlistRow;
   weights: RubricWeights;
   revealed: boolean;
+  blindMode: boolean;
   onReveal: () => void;
   onDetails: () => void;
   onDownload: () => void;
@@ -369,7 +388,17 @@ function ShortlistCard({
         )}
 
         <div className="flex items-center gap-2 pt-1">
-          <Button size="sm" variant="secondary" onClick={onReveal} disabled={revealed}>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={onReveal}
+            disabled={revealed || blindMode}
+            title={
+              blindMode
+                ? "Identities are hidden for screen sharing — switch 'Hide identities' off to reveal."
+                : "Reveal this candidate's identity. The score was locked in before this moment."
+            }
+          >
             <Eye aria-hidden /> {revealed ? "Revealed" : "Reveal identity"}
           </Button>
           <Button size="sm" variant="ghost" onClick={onDetails}>
