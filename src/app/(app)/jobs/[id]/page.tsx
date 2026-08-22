@@ -1,27 +1,18 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Clock, EyeOff, Scale } from "lucide-react";
+import { ArrowLeft, Clock, Scale } from "lucide-react";
 
-import { AiPipeline } from "@/components/ai-pipeline";
 import { CvUploader } from "@/components/cv-uploader";
 import { JobActions } from "@/components/job-actions";
+import { JobStage } from "@/components/job-stage";
+import { RubricEditor } from "@/components/rubric-editor";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { aiConfigured } from "@/lib/ai";
 import { createClient } from "@/lib/supabase/server";
-import type { Gap, Score } from "@/lib/types";
+import type { Gap } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
-
-interface CandidateRow {
-  id: string;
-  applied_at: string;
-  flagged_duplicate: boolean;
-  candidate: { name: string | null; email: string; source: string | null };
-  extracted: boolean;
-  extract_error: string | null;
-  score: Score | null;
-}
 
 export default async function JobDetailPage({
   params,
@@ -42,44 +33,82 @@ export default async function JobDetailPage({
   const { data: appRows } = await supabase
     .from("applications")
     .select(
-      "id, applied_at, flagged_duplicate, candidates(name, email, source), cv_extractions(skills, extract_error), scores(id, skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale, scored_at)"
+      "id, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale)"
     )
     .eq("job_id", id)
     .order("applied_at", { ascending: false });
 
-  const rows: CandidateRow[] = (appRows ?? []).map((r) => {
-    const ext = (r.cv_extractions as unknown[] | null)?.[0] as
-      | { skills: string[] | null; extract_error: string | null }
-      | undefined;
-    const score = (r.scores as unknown[] | null)?.[0] as Score | undefined;
+  interface RawRow {
+    id: string;
+    applied_at: string;
+    flagged_duplicate: boolean;
+    revealed_at: string | null;
+    cv_file_path: string | null;
+    candidates: { name: string | null; email: string; source: string | null }[] | null;
+    cv_extractions: { skills: string[] | null; extract_error: string | null }[] | null;
+    scores:
+      | {
+          skills_score: number;
+          experience_score: number;
+          certifications_score: number;
+          tools_score: number;
+          total_score: number;
+          gaps: Gap[] | null;
+          rationale: string | null;
+        }[]
+      | null;
+  }
+
+  const rows = ((appRows ?? []) as unknown as RawRow[]).map((r) => {
+    const score = r.scores?.[0];
     return {
       id: r.id,
-      applied_at: r.applied_at,
-      flagged_duplicate: r.flagged_duplicate,
-      candidate: r.candidates as unknown as CandidateRow["candidate"],
-      extracted: ext?.skills !== null && ext !== undefined,
-      extract_error: ext?.extract_error ?? null,
-      score: score ?? null,
+      appliedAt: r.applied_at,
+      revealed: r.revealed_at !== null,
+      name: r.candidates?.[0]?.name ?? null,
+      email: r.candidates?.[0]?.email ?? "(unknown)",
+      source: (r.candidates?.[0]?.source as "upload" | "email" | null) ?? null,
+      flaggedDuplicate: r.flagged_duplicate,
+      extracted: r.cv_extractions?.[0]?.skills !== null && r.cv_extractions !== null,
+      extractError: r.cv_extractions?.[0]?.extract_error ?? null,
+      hasCv: r.cv_file_path !== null,
+      score: score
+        ? {
+            skills: Number(score.skills_score),
+            experience: Number(score.experience_score),
+            certifications: Number(score.certifications_score),
+            tools: Number(score.tools_score),
+            total: Number(score.total_score),
+            gaps: score.gaps ?? [],
+            rationale: score.rationale,
+          }
+        : null,
+      rank: 0,
     };
   });
 
-  const pendingExtract = rows.filter((r) => !r.extracted).length;
-  const scored = rows.filter((r) => r.score);
-  const readyToScore = rows.filter((r) => r.extracted && !r.score).length;
+  // Stable candidate numbers: rank by total score at page load.
+  const rankedOrder = [...rows]
+    .filter((r) => r.score)
+    .sort((a, b) => b.score!.total - a.score!.total);
+  rankedOrder.forEach((r, i) => (r.rank = i + 1));
+  let nextRank = rankedOrder.length;
+  for (const r of rows) {
+    if (!r.score) r.rank = ++nextRank;
+  }
 
-  // Ranked: scored candidates by total desc, then the rest by applied date.
-  rows.sort((a, b) => {
-    if (a.score && b.score) return b.score.total_score - a.score.total_score;
-    if (a.score) return -1;
-    if (b.score) return 1;
-    return 0;
-  });
+  const weights = {
+    skills: Number(job.weight_skills),
+    experience: Number(job.weight_experience),
+    certifications: Number(job.weight_certifications),
+    tools: Number(job.weight_tools),
+  };
 
   const rubric = [
-    { label: "Skills", value: Number(job.weight_skills) },
-    { label: "Experience", value: Number(job.weight_experience) },
-    { label: "Certifications", value: Number(job.weight_certifications) },
-    { label: "Tools", value: Number(job.weight_tools) },
+    { label: "Skills", value: weights.skills },
+    { label: "Experience", value: weights.experience },
+    { label: "Certifications", value: weights.certifications },
+    { label: "Tools", value: weights.tools },
   ];
 
   return (
@@ -102,11 +131,21 @@ export default async function JobDetailPage({
               Created {formatDate(job.created_at)}
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Badge variant={job.status === "open" ? "success" : "secondary"}>
               {job.status}
             </Badge>
             <JobActions jobId={job.id} status={job.status} />
+            <RubricEditor
+              jobId={job.id}
+              jdText={job.jd_text}
+              initialWeights={{
+                weight_skills: weights.skills,
+                weight_experience: weights.experience,
+                weight_certifications: weights.certifications,
+                weight_tools: weights.tools,
+              }}
+            />
           </div>
         </div>
       </div>
@@ -149,143 +188,12 @@ export default async function JobDetailPage({
 
       <CvUploader jobId={job.id} jobStatus={job.status} />
 
-      <AiPipeline
+      <JobStage
         jobId={job.id}
-        pendingExtract={pendingExtract}
-        readyToScore={readyToScore}
-        scoredCount={scored.length}
+        rows={rows}
+        weights={weights}
         aiConfigured={aiConfigured()}
       />
-
-      <Card>
-        <CardHeader className="flex-row items-center justify-between space-y-0">
-          <CardTitle className="text-base">
-            Candidates{" "}
-            <span className="ml-1 text-sm font-normal text-muted-foreground">
-              ({rows.length})
-            </span>
-          </CardTitle>
-          {scored.length > 0 && (
-            <Badge variant="warning" className="gap-1">
-              <EyeOff className="size-3" aria-hidden /> Identities visible —
-              blinding arrives in Week 3
-            </Badge>
-          )}
-        </CardHeader>
-        <CardContent className="p-0">
-          {rows.length === 0 ? (
-            <p className="px-6 py-10 text-center text-sm text-muted-foreground">
-              No CVs yet — upload a batch above and candidates appear here with
-              their extracted details.
-            </p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-6 py-3 font-medium">#</th>
-                    <th className="px-4 py-3 font-medium">Candidate</th>
-                    <th className="px-4 py-3 font-medium" title="Weighted total under this job's rubric">
-                      Score
-                    </th>
-                    <th className="px-4 py-3 font-medium text-center" title="Skills / Experience / Certifications / Tools sub-scores">
-                      S / E / C / T
-                    </th>
-                    <th className="px-4 py-3 font-medium">Gaps vs JD</th>
-                    <th className="px-4 py-3 font-medium">Applied</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {rows.map((row, i) => (
-                    <tr key={row.id} className="align-top hover:bg-muted/60">
-                      <td className="px-6 py-4 tabular-nums text-muted-foreground">
-                        {row.score ? i + 1 : "—"}
-                      </td>
-                      <td className="px-4 py-4">
-                        <p className="font-medium">
-                          {row.candidate?.name || "Unknown name"}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {row.candidate?.email} ·{" "}
-                          {row.candidate?.source === "email" ? "Email" : "Upload"}
-                        </p>
-                        <div className="mt-1 flex flex-wrap gap-1">
-                          {row.flagged_duplicate && (
-                            <Badge variant="warning">Possible duplicate</Badge>
-                          )}
-                          {!row.extracted && row.extract_error && (
-                            <Badge variant="destructive" title={row.extract_error}>
-                              Extract failed — retry Extract
-                            </Badge>
-                          )}
-                        </div>
-                        {row.score?.rationale && (
-                          <details className="mt-1.5">
-                            <summary className="cursor-pointer text-xs font-medium text-primary">
-                              Why this score
-                            </summary>
-                            <p className="mt-1 max-w-md text-xs leading-relaxed text-muted-foreground">
-                              {row.score.rationale}
-                            </p>
-                          </details>
-                        )}
-                      </td>
-                      <td className="px-4 py-4">
-                        {row.score ? (
-                          <span className="text-lg font-semibold tabular-nums">
-                            {Math.round(row.score.total_score)}
-                          </span>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-center tabular-nums text-muted-foreground">
-                        {row.score
-                          ? `${Math.round(row.score.skills_score)} / ${Math.round(
-                              row.score.experience_score
-                            )} / ${Math.round(row.score.certifications_score)} / ${Math.round(
-                              row.score.tools_score
-                            )}`
-                          : "—"}
-                      </td>
-                      <td className="px-4 py-4">
-                        {row.score?.gaps && row.score.gaps.length > 0 ? (
-                          <div className="flex max-w-xs flex-wrap gap-1">
-                            {(row.score.gaps as Gap[]).slice(0, 4).map((g, j) => (
-                              <Badge
-                                key={j}
-                                variant={g.severity === "hard" ? "destructive" : "secondary"}
-                                title={`${g.requirement}${g.missing_skill ? ` — missing: ${g.missing_skill}` : ""}`}
-                              >
-                                {g.severity === "hard" ? "Hard: " : ""}
-                                {g.requirement.length > 30
-                                  ? `${g.requirement.slice(0, 30)}…`
-                                  : g.requirement}
-                              </Badge>
-                            ))}
-                            {row.score.gaps.length > 4 && (
-                              <Badge variant="outline">
-                                +{row.score.gaps.length - 4} more
-                              </Badge>
-                            )}
-                          </div>
-                        ) : row.score ? (
-                          <Badge variant="success">No gaps found</Badge>
-                        ) : (
-                          <span className="text-muted-foreground">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-4 text-muted-foreground">
-                        {formatDate(row.applied_at)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
     </div>
   );
 }

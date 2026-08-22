@@ -1,78 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { EyeOff, Sparkles, TriangleAlert, WandSparkles } from "lucide-react";
-import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-interface ReportItem {
-  application_id: string;
-  email: string | null;
-  status: "extracted" | "scored" | "failed";
-  total_score?: number;
-  message?: string;
-}
-
+/**
+ * Presentational pipeline controls. The run logic lives in JobStage so the
+ * shortlist can show skeletons while a pass is in flight.
+ */
 export function AiPipeline({
-  jobId,
   pendingExtract,
   readyToScore,
   scoredCount,
   aiConfigured,
+  running,
+  onExtract,
+  onScore,
 }: {
-  jobId: string;
   pendingExtract: number;
   readyToScore: number;
   scoredCount: number;
   aiConfigured: boolean;
+  running: "extract" | "score" | null;
+  onExtract: () => void;
+  onScore: () => void;
 }) {
-  const router = useRouter();
-  const [extracting, setExtracting] = useState(false);
-  const [scoring, setScoring] = useState(false);
-
-  async function run(
-    kind: "extract" | "score",
-    setLoading: (v: boolean) => void
-  ) {
-    setLoading(true);
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/${kind}`, { method: "POST" });
-      const body = await res.json();
-      if (!res.ok) {
-        toast.error(body.error ?? "The AI pass failed. Please try again.");
-        return;
-      }
-      const results = (body.results ?? []) as ReportItem[];
-      if (results.length === 0) {
-        toast.info(body.message ?? "Nothing to do.");
-        return;
-      }
-      const ok = results.filter((r) => r.status !== "failed");
-      const failed = results.filter((r) => r.status === "failed");
-      if (ok.length > 0) {
-        toast.success(
-          kind === "extract"
-            ? `Extracted structured data from ${ok.length} CV${ok.length === 1 ? "" : "s"}`
-            : `Scored ${ok.length} candidate${ok.length === 1 ? "" : "s"} — blind, as always`
-        );
-      }
-      if (failed.length > 0) {
-        toast.error(`${failed.length} CV${failed.length === 1 ? "" : "s"} failed`, {
-          description: failed[0]?.message?.slice(0, 180),
-        });
-      }
-      router.refresh();
-    } catch {
-      toast.error("Network error — please try again.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <Card>
       <CardHeader>
@@ -103,9 +57,9 @@ export function AiPipeline({
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <Button
-              onClick={() => run("extract", setExtracting)}
-              loading={extracting}
-              disabled={pendingExtract === 0 || scoring}
+              onClick={onExtract}
+              loading={running === "extract"}
+              disabled={pendingExtract === 0 || running !== null}
               title={
                 pendingExtract === 0
                   ? "Every CV on this job already has structured data."
@@ -121,9 +75,9 @@ export function AiPipeline({
               )}
             </Button>
             <Button
-              onClick={() => run("score", setScoring)}
-              loading={scoring}
-              disabled={readyToScore === 0 || extracting}
+              onClick={onScore}
+              loading={running === "score"}
+              disabled={readyToScore === 0 || running !== null}
               title={
                 readyToScore === 0
                   ? "Score after extraction — CVs must be extracted first."

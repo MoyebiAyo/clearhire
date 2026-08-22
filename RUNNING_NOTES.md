@@ -1,4 +1,4 @@
-# ClearHire — Running Notes (Week 1 + Week 2)
+# ClearHire — Running Notes (Week 1 + Week 2 + Week 3)
 
 Feature-by-feature walkthrough of everything built this week: where it lives,
 what it does, and how to test it. Read top-to-bottom as a tour of the app.
@@ -251,3 +251,89 @@ the UPDATE policies on `cv_extractions`/`scores` that Week 2+ needs
 5. **Idempotency:** click Extract or Score again → "Nothing to do" toast,
    zero new rows, no duplicate scoring.
 6. Optional: `AI_DEBUG=true` for full prompts/responses during debugging.
+
+---
+
+# Week 3 — Recruiter UI (shortlist, reveal, rubric editor)
+
+## What was built
+
+### Ranked shortlist — `src/components/shortlist.tsx` (the money screen)
+
+Replaces the Week 2 debug table. Ranked cards, one per candidate:
+
+- **Rank chip (#N)** — stable per page load, assigned by total score;
+  unscored candidates get trailing numbers.
+- **Blurred identity with blur-lift reveal** — the real name/email render
+  under a 6px blur with `select-none` and `aria-hidden` until Reveal is
+  clicked; the blur transitions away over 500ms. Unrevealed cards show
+  "Candidate #N". Reveal persists via `applications.revealed_at`
+  (migration 0003) — refresh-safe.
+- **Score panel** — big weighted total + four sub-scores with mini progress
+  bars, each tooltip'd with its rubric weight. Bar color reflects the score.
+- **Gap badges** — red for hard requirements not met, grey for nice-to-have,
+  hover shows the missing skill; "+N more" collapses long lists. Cards with
+  no gaps show a green "Meets all requirements".
+- **Sort/filter** — dropdown (Total / Skills / Experience / Certifications /
+  Tools) and a "Missing hard requirement (N)" toggle chip.
+- **Detail drawer** — slide-over with full sub-score bars + weights, every
+  gap mapped to its requirement (with missing skill), rationale, source,
+  applied date — and identity + "Download CV" only after reveal.
+
+### Reveal — `POST /api/applications/[id]/reveal`
+
+Sets `revealed_at` (idempotent — returns existing value if already set).
+Presentation gate per spec Part 5, not a security boundary: identity is only
+ever served to the authenticated, RLS-authorized recruiter. Optimistic UI
+update + background persist; toast if the persist fails.
+
+### CV downloads — `GET /api/applications/[id]/cv`
+
+RLS-checked lookup, then a **5-minute signed URL** minted server-side from
+the private `cvs` bucket via the service-role client. No public URLs exist;
+the bucket stays private.
+
+### Rubric editor — `src/components/rubric-editor.tsx` + extended `PATCH /api/jobs/[id]`
+
+- Same live sum-to-100 validation as job creation, forgiving (cancel
+  restores originals, errors never wipe input).
+- **Weights-only change → totals recomputed in code** from the stored blind
+  sub-scores. No LLM call, blind boundary untouched. Toast reports how many
+  totals were recomputed.
+- **JD change (opt-in, behind an explicit warning) → requirements cache
+  cleared + scores rows deleted**, so "Score blind" re-runs under the new
+  requirements (needs the new `scores_delete_own` policy, migration 0003).
+
+### Job stage — `src/components/job-stage.tsx`
+
+Owns the pipeline run state shared by the controls and the shortlist: while
+extract/score is in flight, the shortlist dims and shows skeleton cards with
+a live status line — the "skeleton loaders with live progress" requirement.
+
+## How to test (Week 3 definition of done)
+
+1. Open a scored job → ranked cards with sub-scores, weights, gap badges,
+   rationale in the drawer. Names blurred, "Candidate #N" shown.
+2. Click **Reveal** → blur lifts smoothly, "CV" button appears; reload the
+   page → still revealed (persisted).
+3. Sort by each criterion; toggle "Missing hard requirement" → only flagged
+   candidates remain.
+4. **Edit rubric & JD** → change weights to sum 100 → Save → toast says
+   totals recomputed; totals on cards change without any AI call.
+5. Edit the JD → Save → warning shown; scores cleared; "2. Score blind"
+   becomes ready again; re-run → fresh scores under new requirements.
+6. Reveal a candidate → Details → **Download CV** → file opens from a
+   `sig=...` URL; the bare bucket URL still 403s.
+7. Empty states: job with no CVs teaches the flow; CVs-but-unscored prompts
+   to run the pipeline.
+
+## Week 3 decisions
+
+- `revealed_at` on `applications` (documented schema extension, migration
+  0003) + `scores_delete_own` policy.
+- Rubric re-score is code-only by design: uniform weight changes can't bias
+  anything, and the blind payload is never re-sent. Only a JD change
+  triggers a true AI re-score, and that clears scores for the whole job
+  uniformly — never per-candidate post-reveal.
+- Unrevealed identity data is served to the client under a blur (spec's
+  "client-side gate" posture, stated in-UI microcopy too).

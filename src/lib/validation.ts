@@ -55,4 +55,24 @@ export const jobSchema = z
 
 export type JobInput = z.infer<typeof jobSchema>;
 
+/** Standalone rubric weights (Week 3 editor) — same sum-to-100 rule. */
+export const weightsSchema = z
+  .object({
+    weight_skills: weight,
+    weight_experience: weight,
+    weight_certifications: weight,
+    weight_tools: weight,
+  })
+  .refine(
+    (v) =>
+      v.weight_skills +
+        v.weight_experience +
+        v.weight_certifications +
+        v.weight_tools ===
+      100,
+    { message: "The four weights must add up to exactly 100%." }
+  );
+
+export type WeightsInput = z.infer<typeof weightsSchema>;
+
 export const jobStatusSchema = z.enum(["open", "closed"]);
