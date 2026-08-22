@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Briefcase, LayoutDashboard, LogOut, Sparkles } from "lucide-react";
+import { Briefcase, LayoutDashboard, LogOut, Settings2, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { getSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/jobs", label: "Jobs", icon: Briefcase },
+  { href: "/settings", label: "Templates", icon: Settings2 },
 ];
 
 export function AppShell({

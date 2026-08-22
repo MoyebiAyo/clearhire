@@ -337,3 +337,79 @@ a live status line — the "skeleton loaders with live progress" requirement.
   uniformly — never per-candidate post-reveal.
 - Unrevealed identity data is served to the client under a blur (spec's
   "client-side gate" posture, stated in-UI microcopy too).
+
+---
+
+# Week 4 — Scheduling + Closing the Loop
+
+## What was built
+
+### Email foundation — `src/lib/email.ts`
+- Resend via REST (no SDK): `sendEmail()` + `logEmail()` (every send writes
+  email_log with the provider message id) + `renderTemplate()` for
+  {{merge_fields}} + `buildIcs()` for valid VEVENT calendar files.
+- `EMAIL_FROM` env (default: Resend's test sender). Without RESEND_API_KEY,
+  sends fail softly with explanatory messages in the UI.
+- 9 shared default templates (invite/reminder/rejection × formal/casual/
+  technical) seeded by migration 0004; editable at **Settings → Templates**
+  — editing a shared default FORKS your own copy (shared originals stay
+  pristine for all recruiters).
+
+### Interview creation + invite
+- `POST /api/interviews` — interviewer, location, up to 3 offered slots
+  (self-scheduling) OR a direct time. Creates an unguessable 32-hex
+  `schedule_token` (documented schema extension). Direct bookings write the
+  4 reminder rows immediately (spec 2.4: reminder rows attach to a CONFIRMED
+  interview time; self-scheduling interviews get theirs on candidate pick).
+- `POST /api/interviews/[id]/send-invite` — two-phase: `dry_run` drafts via
+  the spec's email prompt (small fast model `gpt-oss-20b`; falls back to the
+  raw template if drafting fails), then with a body sends via Resend +
+  email_log. The invite embeds the candidate's personal scheduling link.
+- Shortlist cards (revealed, scored) gain a **Schedule interview** flow:
+  details → AI-drafted preview (fully editable) → Send.
+
+### Candidate self-scheduling — `/schedule/[token]` (public)
+- Token-authorized page: offered slots as cards rendered in the CANDIDATE'S
+  OWN timezone, one-tap select, confirm.
+- `POST /api/schedule/[token]` validates the slot, sets scheduled_time,
+  writes exactly 4 reminder_jobs rows (2d/1d/12h/2h before), and emails a
+  confirmation with the .ics attached (non-blocking on email failure).
+- Confirmation screen with a prominent "Add to calendar (.ics)" button
+  (`GET /api/schedule/[token]/ics`), plus the reminder-cadence microcopy.
+- Recruiter side: "Copy link" button hands out the scheduling URL manually.
+
+### Closing the loop
+- `POST /api/applications/[id]/reject` — dry_run drafts a kind, personalized
+  rejection (light on nice-to-have gaps only, never blunt, never fabricates,
+  never mentions AI); with a body it sends + logs + sets status 'rejected'.
+  If email fails, status still updates and the UI explains what happened.
+- `POST /api/interviews/[id]/scorecard` — 1–5 rating + notes stored in
+  interview_scorecards, advances the application to 'interviewed'.
+- Card badges: Rejected / Interview date / "Invite sent — awaiting pick" /
+  Scorecard ★n. The drawer shows an **AI blind score vs human rating**
+  comparison block with notes.
+
+## How to test (Week 4 definition of done)
+1. Reveal a scored candidate → **Schedule interview** → offer 3 slots →
+   Draft invite → edit → Send → check `interviews` + `email_log` rows
+   (Supabase table editor) and the invite in the sending inbox.
+2. Open the scheduling link (from the email, or "Copy link") → slot cards in
+   your timezone → Confirm → confirmation screen + .ics download; Supabase
+   shows scheduled_time set + exactly 4 reminder_jobs at −2d/−1d/−12h/−2h.
+3. Direct-book an interview 3 days out → 4 reminder rows appear instantly.
+4. Reveal another candidate → **Reject** → Draft → edit → Send and reject →
+   status badge 'Rejected', email_log row, respectful email delivered.
+5. Submit a **Scorecard** (1–5 + notes) → card shows ★n, drawer shows the
+   AI-vs-human comparison.
+6. Settings → Templates: edit a shared default → saved as your own copy.
+
+## Week 4 decisions & notes
+- Reminder rows attach to confirmation time (spec 2.4 wording), which for
+  direct bookings equals creation time.
+- Resend test sender (onboarding@resend.dev) only delivers to the account
+  owner's email until a domain is verified — flows degrade gracefully and
+  say so. Set `RESEND_API_KEY` + `EMAIL_FROM` (and verify a domain for real
+  candidate sends).
+- Interviews embed `interview_scorecards` via PostgREST nesting; everything
+  recruiter-side is RLS-scoped; the public schedule endpoints authorize
+  solely by the unguessable token (service-role lookups).

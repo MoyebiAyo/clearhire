@@ -33,13 +33,25 @@ export default async function JobDetailPage({
   const { data: appRows } = await supabase
     .from("applications")
     .select(
-      "id, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale)"
+      "id, status, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), interviews(id, status, scheduled_time, schedule_token, interviewer, location_or_link, interview_scorecards(interviewer_rating, interviewer_notes))"
     )
     .eq("job_id", id)
     .order("applied_at", { ascending: false });
 
+  const { data: templateRows } = await supabase
+    .from("email_templates")
+    .select("id, type, tone, subject")
+    .eq("type", "invite")
+    .order("tone");
+  const templates = (templateRows ?? []).map((t) => ({
+    id: t.id as string,
+    tone: t.tone as string,
+    subject: t.subject as string,
+  }));
+
   interface RawRow {
     id: string;
+    status: string;
     applied_at: string;
     flagged_duplicate: boolean;
     revealed_at: string | null;
@@ -57,10 +69,24 @@ export default async function JobDetailPage({
           rationale: string | null;
         }[]
       | null;
+    interviews:
+      | {
+          id: string;
+          status: string;
+          scheduled_time: string | null;
+          schedule_token: string | null;
+          interviewer: string | null;
+          location_or_link: string | null;
+          interview_scorecards:
+            | { interviewer_rating: number; interviewer_notes: string | null }[]
+            | null;
+        }[]
+      | null;
   }
 
   const rows = ((appRows ?? []) as unknown as RawRow[]).map((r) => {
     const score = r.scores?.[0];
+    const interview = r.interviews?.[0];
     return {
       id: r.id,
       appliedAt: r.applied_at,
@@ -72,6 +98,7 @@ export default async function JobDetailPage({
       extracted: r.cv_extractions?.[0]?.skills !== null && r.cv_extractions !== null,
       extractError: r.cv_extractions?.[0]?.extract_error ?? null,
       hasCv: r.cv_file_path !== null,
+      status: r.status,
       score: score
         ? {
             skills: Number(score.skills_score),
@@ -83,6 +110,23 @@ export default async function JobDetailPage({
             rationale: score.rationale,
           }
         : null,
+      interview: interview
+        ? {
+            id: interview.id,
+            status: interview.status,
+            scheduled_time: interview.scheduled_time,
+            schedule_token: interview.schedule_token,
+            interviewer: interview.interviewer,
+            location_or_link: interview.location_or_link,
+            scorecard: interview.interview_scorecards?.[0]
+              ? {
+                  rating: Number(interview.interview_scorecards[0].interviewer_rating),
+                  notes: interview.interview_scorecards[0].interviewer_notes,
+                }
+              : null,
+          }
+        : null,
+      templates,
       rank: 0,
     };
   });

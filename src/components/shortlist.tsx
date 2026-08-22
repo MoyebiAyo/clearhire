@@ -17,8 +17,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RunProgress } from "@/components/job-stage";
+import { InterviewActions } from "@/components/interview-actions";
 import type { Gap } from "@/lib/types";
 import { cn, formatDate } from "@/lib/utils";
+
+export interface TemplateOption {
+  id: string;
+  tone: string;
+  subject: string;
+}
+
+export interface InterviewInfo {
+  id: string;
+  status: string;
+  scheduled_time: string | null;
+  schedule_token: string | null;
+  interviewer: string | null;
+  location_or_link: string | null;
+  scorecard: { rating: number; notes: string | null } | null;
+}
 
 export interface ShortlistScore {
   skills: number;
@@ -42,7 +59,10 @@ export interface ShortlistRow {
   extracted: boolean;
   extractError: string | null;
   hasCv: boolean;
+  status: string;
   score: ShortlistScore | null;
+  interview: InterviewInfo | null;
+  templates: TemplateOption[];
 }
 
 export interface RubricWeights {
@@ -376,6 +396,18 @@ function ShortlistCard({
                 </Badge>
               )}
               {!row.extracted && !row.extractError && <Badge variant="secondary">Awaiting extraction</Badge>}
+              {row.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+              {row.interview?.scheduled_time && (
+                <Badge variant="success" title={row.interview.location_or_link ?? undefined}>
+                  Interview {formatDate(row.interview.scheduled_time)}
+                </Badge>
+              )}
+              {row.interview && !row.interview.scheduled_time && (
+                <Badge variant="secondary">Invite sent — awaiting pick</Badge>
+              )}
+              {row.interview?.scorecard && (
+                <Badge variant="default" title="Human rating next to the AI score">Scorecard ★{row.interview.scorecard.rating}</Badge>
+              )}
             </div>
           </div>
           {s && (
@@ -460,6 +492,8 @@ function ShortlistCard({
             </Button>
           )}
         </div>
+
+        {revealed && row.score && <InterviewActions row={row} />}
       </CardContent>
     </Card>
   );
@@ -600,6 +634,37 @@ function DetailDrawer({
                 <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   {s.rationale}
                 </p>
+              </div>
+            )}
+
+            {row.interview && (
+              <div className="rounded-lg border border-border p-3">
+                <h4 className="text-sm font-medium">Interview</h4>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  {row.interview.scheduled_time
+                    ? new Date(row.interview.scheduled_time).toUTCString()
+                    : "Time not confirmed yet — waiting for the candidate to pick a slot."}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {row.interview.interviewer} · {row.interview.location_or_link}
+                </p>
+                {row.interview.scorecard && s && (
+                  <div className="mt-3 grid grid-cols-2 gap-3 text-center">
+                    <div className="rounded-lg bg-muted p-2">
+                      <p className="text-xs text-muted-foreground">AI blind score</p>
+                      <p className="text-xl font-semibold tabular-nums">{Math.round(s.total)}</p>
+                    </div>
+                    <div className="rounded-lg bg-primary-soft p-2">
+                      <p className="text-xs text-primary">Human rating</p>
+                      <p className="text-xl font-semibold tabular-nums">{row.interview.scorecard.rating}/5</p>
+                    </div>
+                  </div>
+                )}
+                {row.interview.scorecard?.notes && (
+                  <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                    Notes: {row.interview.scorecard.notes}
+                  </p>
+                )}
               </div>
             )}
           </div>
