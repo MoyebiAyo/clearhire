@@ -33,6 +33,22 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  // Email-confirmation / OAuth callback: Supabase redirects back with
+  // ?code=… (PKCE) which must be exchanged for a session server-side.
+  const code = request.nextUrl.searchParams.get("code");
+  if (code) {
+    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/dashboard";
+      url.search = "";
+      const redirect = NextResponse.redirect(url);
+      // Carry the session cookies set during the exchange onto the redirect.
+      response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
+      return redirect;
+    }
+  }
+
   if (
     !user &&
     !request.nextUrl.pathname.startsWith("/login") &&

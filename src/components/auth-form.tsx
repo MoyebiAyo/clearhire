@@ -49,7 +49,11 @@ export function AuthForm() {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { org_name: orgName || null } },
+          options: {
+            data: { org_name: orgName || null },
+            // Confirm right back to where the signup happened (local or prod).
+            emailRedirectTo: window.location.origin,
+          },
         });
         if (error) {
           setError(error.message);
