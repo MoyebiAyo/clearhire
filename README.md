@@ -77,3 +77,9 @@ supabase/
 docs/
   product-spec.md the product documentation (build context)
 ```
+
+## Live deployment
+
+- **App:** https://clearhire-rho.vercel.app
+- **Supabase project ref:** `rzuhtwrrmzdqbjzhydzq` (linked; run `supabase db push` after adding migrations)
+- **Repo:** https://github.com/MoyebiAyo/clearhire (pushes to `main` auto-deploy)
