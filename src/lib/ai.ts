@@ -18,11 +18,29 @@ const REQUEST_TIMEOUT_MS = 45_000;
 export class AiError extends Error {
   constructor(
     message: string,
-    public readonly status?: number
+    public readonly status?: number,
+    /** Seconds to wait before retrying, when the provider sends retry-after. */
+    public readonly retryAfter?: number
   ) {
     super(message);
     this.name = "AiError";
   }
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 429s and 5xx are transient — they deserve backoff, not instant retries. */
+function isTransient(err: unknown): boolean {
+  return (
+    err instanceof AiError &&
+    (err.status === 429 || (err.status !== undefined && err.status >= 500))
+  );
+}
+
+function backoffMs(err: unknown, attempt: number): number {
+  const retryAfter = err instanceof AiError ? err.retryAfter : undefined;
+  if (retryAfter && retryAfter > 0) return Math.min(retryAfter * 1000, 20_000);
+  return Math.min(1500 * 2 ** (attempt - 1), 12_000);
 }
 
 interface Provider {
@@ -77,15 +95,20 @@ export async function chatJSON<T = unknown>(opts: ChatJsonOptions): Promise<T> {
 
   const failures: string[] = [];
   for (const provider of configured) {
-    // One retry per provider before failing over.
-    for (let attempt = 1; attempt <= 2; attempt++) {
+    // Transient failures (429 rate limits, 5xx) back off exponentially —
+    // honoring retry-after when sent — before failing over to the next
+    // provider. Free-tier token budgets make 429s routine under load.
+    for (let attempt = 1; attempt <= 4; attempt++) {
       try {
         return await callOnce<T>(provider, opts);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
         failures.push(`${provider.name}#${attempt}: ${msg}`);
-        // No point retrying a deterministic parse of a deterministic
-        // response twice — but a second shot is cheap and harmless.
+        if (isTransient(err) && attempt < 4) {
+          await sleep(backoffMs(err, attempt));
+          continue;
+        }
+        break;
       }
     }
   }
@@ -113,7 +136,8 @@ async function callOnce<T>(provider: Provider, opts: ChatJsonOptions): Promise<T
     const body = await res.text().catch(() => "");
     throw new AiError(
       `${provider.name} HTTP ${res.status}: ${body.slice(0, 200)}`,
-      res.status
+      res.status,
+      Number(res.headers.get("retry-after")) || undefined
     );
   }
 

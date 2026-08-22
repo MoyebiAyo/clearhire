@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
-const CONCURRENCY = 4;
+const CONCURRENCY = 2;
 
 export interface ScoreReportItem {
   application_id: string;

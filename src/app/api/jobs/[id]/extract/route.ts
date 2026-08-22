@@ -6,9 +6,10 @@ import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
-/** Cap raw CV size sent to the model (chars) — CVs are far below this. */
-const MAX_RAW_CHARS = 15_000;
-const CONCURRENCY = 4;
+/** Cap raw CV size sent to the model (chars) — keeps requests inside
+ * free-tier token budgets while preserving all meaningful CV content. */
+const MAX_RAW_CHARS = 10_000;
+const CONCURRENCY = 2;
 
 export interface ExtractReportItem {
   application_id: string;
