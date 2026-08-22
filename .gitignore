@@ -29,3 +29,6 @@ next-env.d.ts
 
 # vercel
 .vercel
+
+# generated test CV fixtures
+test-cvs/
