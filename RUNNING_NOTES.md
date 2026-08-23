@@ -556,3 +556,9 @@ time-to-hire; set by every status-changing flow.
    counts update; analytics reflect the moves.
 3. Duplicate badge → resolve both ways on a throwaway pair.
 4. Fire reminder sends a real email once.
+
+## Gmail intake — "0 mail scanned" diagnosis (final)
+- DB check: connection exists, `last_polled_at` fresh → auth + token refresh work server-side.
+- Direct Gmail API probe (curl + stored refresh token): profile returns `moyebiayodelesegun@gmail.com` (33k msgs), but `has:attachment newer_than:7d` = **0 messages, including self-sent**. The inbox simply had no CV email — the poller reported truthfully. No bug.
+- Fixed a real cosmetic bug found along the way: OAuth flow requests only Gmail scopes → no `id_token` → `gmail_address` stored as "(unknown)". Callback now fetches the address from Gmail's `/users/me/profile` (works under `gmail.readonly`); existing row backfilled.
+- Correct test (must be INCOMING mail): send FROM a different account (e.g. me@ayodev.tech) TO the connected Gmail, subject "Application for Senior Backend Engineer" (open job exists), test CV PDF attached → Settings → Poll now.

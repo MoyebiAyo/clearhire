@@ -38,6 +38,7 @@ export async function GET(request: Request) {
     });
     const tokens = (await tokenRes.json()) as {
       refresh_token?: string;
+      access_token?: string;
       id_token?: string;
       error?: string;
     };
@@ -45,10 +46,21 @@ export async function GET(request: Request) {
       throw new Error(tokens.error ?? "no refresh token returned");
     }
 
-    // Gmail address from the id_token payload (our own consent flow).
-    const address = tokens.id_token
-      ? JSON.parse(Buffer.from(tokens.id_token.split(".")[1], "base64").toString()).email
-      : "(unknown)";
+    // We request only Gmail scopes (no openid/email), so Google sends no
+    // id_token — get the address from Gmail's own profile endpoint instead.
+    let address = "(unknown)";
+    try {
+      const profileRes = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/profile",
+        { headers: { Authorization: `Bearer ${tokens.access_token}` } },
+      );
+      if (profileRes.ok) {
+        const profile = (await profileRes.json()) as { emailAddress?: string };
+        if (profile.emailAddress) address = profile.emailAddress;
+      }
+    } catch {
+      // address stays "(unknown)" — connection still works without it
+    }
 
     const admin = createAdminClient();
     const { error } = await admin.rpc("gmail_store_token", {
