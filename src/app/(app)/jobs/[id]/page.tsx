@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, Scale } from "lucide-react";
 
 import { CvUploader } from "@/components/cv-uploader";
+import { CopilotDrawer } from "@/components/copilot-drawer";
 import { JobActions } from "@/components/job-actions";
 import { JobStage } from "@/components/job-stage";
 import { RubricEditor } from "@/components/rubric-editor";
@@ -13,6 +14,11 @@ import { aiConfigured } from "@/lib/ai";
 import { createClient } from "@/lib/supabase/server";
 import type { Gap } from "@/lib/types";
 import { cn, formatDate, one } from "@/lib/utils";
+
+interface ExamStatus {
+  status: string;
+  score: number | null;
+}
 
 export default async function JobDetailPage({
   params,
@@ -61,6 +67,32 @@ export default async function JobDetailPage({
         ? (gmailConn.gmail_address as string)
         : null,
   };
+
+  // Active exam (if any) drives the blended final score: CV% + Exam% = 100.
+  const { data: examRow } = await supabase
+    .from("exams")
+    .select(
+      "id, status, questions_per_candidate, duration_minutes, weight_cv, weight_exam"
+    )
+    .eq("job_id", id)
+    .eq("status", "active")
+    .maybeSingle();
+  const examWeights = examRow
+    ? { cv: Number(examRow.weight_cv), exam: Number(examRow.weight_exam) }
+    : null;
+  const inviteByApp = new Map<string, ExamStatus>();
+  if (examRow) {
+    const { data: inviteRows } = await supabase
+      .from("exam_invites")
+      .select("application_id, status, score")
+      .eq("exam_id", examRow.id);
+    for (const inv of inviteRows ?? []) {
+      inviteByApp.set(inv.application_id, {
+        status: inv.status,
+        score: inv.score === null ? null : Number(inv.score),
+      });
+    }
+  }
 
   interface RawRow {
     id: string;
@@ -143,6 +175,7 @@ export default async function JobDetailPage({
               : null,
           }
         : null,
+      exam: inviteByApp.get(r.id) ?? null,
       templates,
       returningJobs: [] as string[],
       rank: 0,
@@ -178,10 +211,19 @@ export default async function JobDetailPage({
     r.returningJobs = r.candidateId ? (returningMap.get(r.candidateId) ?? []) : [];
   }
 
-  // Stable candidate numbers: rank by total score at page load.
+  // Stable candidate numbers: rank by FINAL score (CV + exam blend) when an
+  // active exam exists, otherwise by the CV total.
+  const finalOf = (r: (typeof rows)[number]) => {
+    const s = r.score;
+    if (!s) return -1;
+    if (examWeights && r.exam?.score !== null && r.exam?.score !== undefined) {
+      return (s.total * examWeights.cv + r.exam.score * examWeights.exam) / 100;
+    }
+    return s.total;
+  };
   const rankedOrder = [...rows]
     .filter((r) => r.score)
-    .sort((a, b) => b.score!.total - a.score!.total);
+    .sort((a, b) => finalOf(b) - finalOf(a));
   rankedOrder.forEach((r, i) => (r.rank = i + 1));
   let nextRank = rankedOrder.length;
   for (const r of rows) {
@@ -226,6 +268,7 @@ export default async function JobDetailPage({
             <Badge variant={job.status === "open" ? "success" : "secondary"}>
               {job.status}
             </Badge>
+            <CopilotDrawer jobId={job.id} jobTitle={job.title} />
             <JobActions jobId={job.id} status={job.status} />
             <RubricEditor
               jobId={job.id}
@@ -289,6 +332,7 @@ export default async function JobDetailPage({
         rows={rows}
         weights={weights}
         aiConfigured={aiConfigured()}
+        examWeights={examWeights}
       />
     </div>
   );

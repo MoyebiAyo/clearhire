@@ -65,3 +65,15 @@ and never show raw provider errors (they're sanitized to human messages).
    Emails that match no job are preserved under "waiting for manual
    assignment" on Settings — nothing is ever dropped. Auto-poll runs every
    10 minutes via the Cloudflare worker.
+
+## Minute 4 bonus: the Copilot + live exam
+1. On the job page, click **Ask AI** → type "Who's below 60?" → a rejection
+   card appears listing the matches → confirm → they're rejected AND emailed,
+   then moved to the Rejected list (undoable in one click).
+2. Type "Set up an exam for everyone above 70" → edit the AI's proposal
+   (questions, minutes, CV/exam weights) → Generate & invite → questions are
+   written from YOUR job description.
+3. Open one of the invite links in another tab: full-screen, countdown,
+   tab-switch = strike (3 = forfeited). Submit → the score blends into the
+   shortlist automatically (Final = CV 70% + Exam 30% by default).
+Everything the Copilot saw was blind — skills and scores, never names.

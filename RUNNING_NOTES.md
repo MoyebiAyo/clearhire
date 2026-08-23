@@ -577,3 +577,40 @@ time-to-hire; set by every status-changing flow.
 - Verified live post-deploy: worker-secret poll returns `{connections:1,
   scanned:0, errors:[]}` (refactor intact); `/api/mailbox/pull` returns 401
   unauthenticated.
+
+## AI Chat Assistant + AI-Powered Exam Engine (post-Week 6, approved plan)
+Three workstreams, all live-verified:
+
+**A. Rejected bucket** — rejected applications leave the ranked shortlist into a
+collapsible "Rejected (N)" section with per-card Undo (reverts to screened/applied,
+scores untouched; `POST /api/applications/[id]/undo-rejection`). Pipeline kanban
+stays the full oversight view.
+
+**B. Exam engine** — migration 0007: `exams` / `exam_questions` / `exam_invites`
+(RLS via exams→jobs chain; anon reads verified blocked), exam_invite templates ×3
+tones. `sendEmailBatch` chunks 10/call @500ms. Setup: POST create (draft, one
+active exam/job) → /generate?limit=25 chunked bank building from JD +
+requirements_cache (difficulty calibrated to JD seniority) → /activate invites
+(deterministic selection in code) + batch emails. Candidate side /exam/[token]:
+briefing → fullscreen timed run → seeded per-candidate draw + option shuffle
+(stable across refreshes; correct_index NEVER sent to client) → server-side
+grading in code (text-match against options[correct_index]); 3-strike proctoring
+(tab switch/blur/fullscreen exit/copy/screenshot key), tab close = immediate
+forfeit via sendBeacon, overtime = forfeited-but-graded, idempotent submit,
+late-answers-after-strike-3 still graded. Blended finals: final = CV×wCv +
+Exam×wExam (weights printed inline; exam bar on cards; rank by final; absent
+exam = CV-only, no silent zeros).
+Live DoD (throwaway exam on the closed job, deleted after, zero residue):
+409 before start ✓ stable draw ✓ no correct_index leak ✓ all-correct = 100 ✓
+idempotent resubmit ✓ strikes 1/2/3 → forfeited ✓ questions blocked after
+forfeit ✓ 404 bad token ✓ page 200 ✓ late-empty-answers forfeit score 0 ✓.
+
+**C. Copilot** — slide-over drawer on the job page ("Ask AI"). JSON-action
+protocol over chatJSON (temp 0, backoff) rather than native tool calling
+(gpt-oss-120b tool-call reliability issues documented in the wild). Blind
+context server-enforced (identity only for revealed; [blind-audit] logged);
+model PROPOSES criteria, code resolves ids deterministically — reject_preview
+and exam_setup return confirmation cards, cv_scan composes cited evidence
+answers in code from raw_text (≤12 CVs × 2600 chars). Executors:
+POST /api/applications/reject-bulk (status flip first, then throttled batch
+emails, per-candidate logging, failures retryable) and the exam setup flow.

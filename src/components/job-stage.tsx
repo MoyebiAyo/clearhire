@@ -35,11 +35,13 @@ export function JobStage({
   rows,
   weights,
   aiConfigured,
+  examWeights = null,
 }: {
   jobId: string;
   rows: ShortlistRow[];
   weights: RubricWeights;
   aiConfigured: boolean;
+  examWeights?: { cv: number; exam: number } | null;
 }) {
   const router = useRouter();
   const [running, setRunning] = useState<RunProgress | null>(null);
@@ -126,7 +128,7 @@ export function JobStage({
         onExtract={() => run("extract")}
         onScore={() => run("score")}
       />
-      <Shortlist rows={rows} weights={weights} busy={running} />
+      <Shortlist rows={rows} weights={weights} busy={running} examWeights={examWeights} />
     </div>
   );
 }

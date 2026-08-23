@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Archive,
   CalendarDays,
+  ChevronDown,
   Eye,
   EyeOff,
   FileDown,
   Info,
+  Undo2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -66,6 +69,8 @@ export interface ShortlistRow {
   returningJobs?: string[];
   score: ShortlistScore | null;
   interview: InterviewInfo | null;
+  /** Exam session for the job's active exam, if invited. */
+  exam?: { status: string; score: number | null } | null;
   templates: TemplateOption[];
 }
 
@@ -125,14 +130,37 @@ function scoreColor(v: number): string {
   return "bg-warning";
 }
 
+/** Final = CV × wCv + Exam × wExam when an exam score exists (in code,
+ * never by the AI); otherwise the CV total stands alone. */
+function finalScore(
+  row: ShortlistRow,
+  examWeights: { cv: number; exam: number } | null
+): number | null {
+  if (!row.score) return null;
+  if (examWeights && row.exam && row.exam.score !== null) {
+    return (row.score.total * examWeights.cv + row.exam.score * examWeights.exam) / 100;
+  }
+  return row.score.total;
+}
+
+const EXAM_CHIP: Record<string, { label: string; variant: "default" | "warning" | "secondary" }> = {
+  invited: { label: "Exam invited", variant: "secondary" },
+  in_progress: { label: "Exam in progress", variant: "secondary" },
+  submitted: { label: "Exam done", variant: "default" },
+  forfeited: { label: "Exam forfeited", variant: "warning" },
+  expired: { label: "Exam expired", variant: "secondary" },
+};
+
 export function Shortlist({
   rows,
   weights,
   busy,
+  examWeights = null,
 }: {
   rows: ShortlistRow[];
   weights: RubricWeights;
   busy: RunProgress | null;
+  examWeights?: { cv: number; exam: number } | null;
 }) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [blindMode, setBlindMode] = useState(false);
@@ -140,6 +168,9 @@ export function Shortlist({
   const [onlyHardGaps, setOnlyHardGaps] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [dupId, setDupId] = useState<string | null>(null);
+  const [showRejected, setShowRejected] = useState(false);
+  const [undoingId, setUndoingId] = useState<string | null>(null);
+  const router = useRouter();
 
   const busyLine = useRotatingLine(
     busy?.kind === "score" ? SCORE_LINES : EXTRACT_LINES,
@@ -150,22 +181,60 @@ export function Shortlist({
   const isRevealed = (r: ShortlistRow) =>
     !blindMode && (r.revealed || revealed[r.id]);
 
+  /** Rejected applications leave the main shortlist for their own bucket
+   * below (viewable + undoable) — the ranked list stays decision-focused. */
+  const activeRows = useMemo(
+    () => rows.filter((r) => r.status !== "rejected"),
+    [rows]
+  );
+  const rejectedRows = useMemo(
+    () => rows.filter((r) => r.status === "rejected"),
+    [rows]
+  );
+
   const visible = useMemo(() => {
-    let list = [...rows];
+    let list = [...activeRows];
     if (onlyHardGaps) {
       list = list.filter((r) => (r.score?.gaps ?? []).some((g) => g.severity === "hard"));
     }
     list.sort((a, b) => {
-      const get = (r: ShortlistRow) => (r.score ? r.score[sortKey] : -1);
+      const get = (r: ShortlistRow) =>
+        sortKey === "total"
+          ? finalScore(r, examWeights) ?? -1
+          : r.score
+            ? r.score[sortKey]
+            : -1;
       return get(b) - get(a);
     });
     return list;
-  }, [rows, sortKey, onlyHardGaps]);
+  }, [activeRows, sortKey, onlyHardGaps, examWeights]);
 
-  const scoredCount = rows.filter((r) => r.score).length;
-  const hardGapCount = rows.filter((r) =>
+  const scoredCount = activeRows.filter((r) => r.score).length;
+  const hardGapCount = activeRows.filter((r) =>
     (r.score?.gaps ?? []).some((g) => g.severity === "hard")
   ).length;
+
+  async function undoRejection(row: ShortlistRow) {
+    setUndoingId(row.id);
+    try {
+      const res = await fetch(`/api/applications/${row.id}/undo-rejection`, {
+        method: "POST",
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error ?? "Couldn't restore the application.");
+        return;
+      }
+      toast.success(
+        `Back on the shortlist as ${body.status === "screened" ? "screened" : "applied"} — their locked score is untouched`
+      );
+      router.refresh();
+    } catch {
+      toast.error("Network error — please try again.");
+    } finally {
+      setUndoingId(null);
+    }
+  }
 
   async function reveal(row: ShortlistRow) {
     setRevealed((s) => ({ ...s, [row.id]: true }));
@@ -202,7 +271,9 @@ export function Shortlist({
           </h2>
           <p className="mt-0.5 flex items-center gap-1.5 text-sm text-muted-foreground">
             <EyeOff className="size-3.5" aria-hidden />
-            Identities unlock per candidate, only after scores are locked in.
+            {examWeights
+              ? `Final score = CV ${examWeights.cv}% + exam ${examWeights.exam}% — identities unlock per candidate after scores are locked in.`
+              : "Identities unlock per candidate, only after scores are locked in."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -267,6 +338,22 @@ export function Shortlist({
             </div>
           </CardContent>
         </Card>
+      ) : activeRows.length === 0 ? (
+        <Card className="border-dashed">
+          <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+            <span className="text-3xl" aria-hidden>🗂️</span>
+            <div className="max-w-sm space-y-1">
+              <p className="font-medium">
+                All {rejectedRows.length} application{rejectedRows.length === 1 ? "" : "s"} on
+                this job were rejected
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Change your mind? Restore any of them from the Rejected list
+                below — scores were never touched.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       ) : scoredCount === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
@@ -274,7 +361,7 @@ export function Shortlist({
             <div className="max-w-sm space-y-1">
               <p className="font-medium">Not scored yet</p>
               <p className="text-sm text-muted-foreground">
-                {rows.some((r) => !r.extracted)
+                {activeRows.some((r) => !r.extracted)
                   ? "Run “1. Extract skills”, then “2. Score blind” above to build the shortlist."
                   : "CVs are extracted — run “2. Score blind” above to build the shortlist."}
               </p>
@@ -312,6 +399,7 @@ export function Shortlist({
                 key={row.id}
                 row={row}
                 weights={weights}
+                examWeights={examWeights}
                 revealed={isRevealed(row)}
                 blindMode={blindMode}
                 onReveal={() => reveal(row)}
@@ -328,6 +416,86 @@ export function Shortlist({
             </p>
           )}
         </>
+      )}
+
+      {rejectedRows.length > 0 && (
+        <div className="rounded-xl border border-border">
+          <button
+            type="button"
+            onClick={() => setShowRejected((v) => !v)}
+            aria-expanded={showRejected}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="flex items-center gap-2 text-sm font-medium">
+              <Archive className="size-4 text-muted-foreground" aria-hidden />
+              Rejected candidates
+              <Badge variant="secondary">{rejectedRows.length}</Badge>
+              <span className="hidden text-xs font-normal text-muted-foreground sm:inline">
+                Out of the running — kept here so nothing is lost
+              </span>
+            </span>
+            <ChevronDown
+              className={cn(
+                "size-4 shrink-0 text-muted-foreground transition-transform",
+                showRejected && "rotate-180"
+              )}
+              aria-hidden
+            />
+          </button>
+          {showRejected && (
+            <ul className="divide-y divide-border border-t border-border">
+              {rejectedRows.map((row) => (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3 text-sm"
+                >
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold text-muted-foreground"
+                      title="Rank when this shortlist loaded."
+                    >
+                      #{row.rank}
+                    </span>
+                    <span
+                      className={cn(
+                        "min-w-0 truncate font-medium transition-all duration-500 select-none",
+                        isRevealed(row) ? "blur-0" : "blur-[6px]"
+                      )}
+                      aria-hidden={!isRevealed(row)}
+                    >
+                      {row.name || row.email.split("@")[0]}
+                    </span>
+                    {!isRevealed(row) && (
+                      <span className="text-muted-foreground">Candidate #{row.rank}</span>
+                    )}
+                  </span>
+                  <span className="flex items-center gap-2">
+                    {row.score ? (
+                      <span
+                        className="tabular-nums text-muted-foreground"
+                        title="Blind score, locked before rejection — unchanged by restore."
+                      >
+                        {Math.round(row.score.total)}/100
+                      </span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">not scored</span>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => undoRejection(row)}
+                      loading={undoingId === row.id}
+                      disabled={undoingId !== null}
+                      title="Puts them back on the active shortlist with their locked score intact."
+                    >
+                      <Undo2 aria-hidden /> Undo
+                    </Button>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {openRow && (
@@ -425,6 +593,7 @@ function DuplicateDialog({
 function ShortlistCard({
   row,
   weights,
+  examWeights,
   revealed,
   blindMode,
   onReveal,
@@ -434,6 +603,7 @@ function ShortlistCard({
 }: {
   row: ShortlistRow;
   weights: RubricWeights;
+  examWeights: { cv: number; exam: number } | null;
   revealed: boolean;
   blindMode: boolean;
   onReveal: () => void;
@@ -442,6 +612,9 @@ function ShortlistCard({
   onDuplicate: () => void;
 }) {
   const s = row.score;
+  const blended = examWeights && row.exam?.score !== null && row.exam?.score !== undefined;
+  const final = s ? finalScore(row, examWeights) : null;
+  const examChip = row.exam ? EXAM_CHIP[row.exam.status] : null;
   return (
     <Card className={cn("transition-shadow hover:shadow-md", !s && "opacity-70")}>
       <CardContent className="space-y-4 p-5">
@@ -506,6 +679,21 @@ function ShortlistCard({
               )}
               {!row.extracted && !row.extractError && <Badge variant="secondary">Awaiting extraction</Badge>}
               {row.status === "rejected" && <Badge variant="destructive">Rejected</Badge>}
+              {examChip && (
+                <Badge
+                  variant={examChip.variant}
+                  title={
+                    row.exam?.score !== null && row.exam?.score !== undefined
+                      ? `Exam score ${row.exam.score}/100 — graded automatically, in code.`
+                      : "Proctored online exam status."
+                  }
+                >
+                  {examChip.label}
+                  {row.exam?.score !== null && row.exam?.score !== undefined
+                    ? ` · ${Math.round(row.exam.score)}`
+                    : ""}
+                </Badge>
+              )}
               {row.interview?.scheduled_time && (
                 <Badge variant="success" title={row.interview.location_or_link ?? undefined}>
                   Interview {formatDate(row.interview.scheduled_time)}
@@ -520,11 +708,20 @@ function ShortlistCard({
             </div>
           </div>
           {s && (
-            <div className="text-right" title="Weighted total under this job's rubric — computed in code, never by the AI.">
+            <div
+              className="text-right"
+              title={
+                blended && final !== null
+                  ? `Final = CV ${Math.round(s.total)} × ${examWeights!.cv}% + Exam ${Math.round(row.exam!.score!)} × ${examWeights!.exam}% — computed in code, never by the AI.`
+                  : "Weighted total under this job's rubric — computed in code, never by the AI."
+              }
+            >
               <p className="text-3xl font-semibold tabular-nums leading-none">
-                {Math.round(s.total)}
+                {blended ? Math.round(final! * 10) / 10 : Math.round(s.total)}
               </p>
-              <p className="text-xs text-muted-foreground">/ 100</p>
+              <p className="text-xs text-muted-foreground">
+                {blended ? `final · CV ${Math.round(s.total)} + exam ${Math.round(row.exam!.score!)}` : "/ 100"}
+              </p>
             </div>
           )}
         </div>
@@ -547,6 +744,31 @@ function ShortlistCard({
                 </div>
               </div>
             ))}
+            {examWeights && row.exam && (
+              <div
+                title={`Proctored exam score, weighted ${examWeights.exam}% in the final score. Graded automatically in code.`}
+              >
+                <div className="flex items-baseline justify-between text-xs">
+                  <span className="text-muted-foreground">
+                    Exam <span className="tabular-nums opacity-70">{examWeights.exam}%</span>
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {row.exam.score !== null ? Math.round(row.exam.score) : "—"}
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn(
+                      "h-full rounded-full",
+                      row.exam.score !== null ? scoreColor(row.exam.score) : "bg-muted-foreground/20"
+                    )}
+                    style={{
+                      width: row.exam.score !== null ? `${Math.min(row.exam.score, 100)}%` : "100%",
+                    }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         )}
 
