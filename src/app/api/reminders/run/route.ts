@@ -54,7 +54,7 @@ export async function POST(request: Request) {
   const { data: dueRows } = await admin
     .from("reminder_jobs")
     .select(
-      "id, offset_label, offset_label, interviews!inner(id, status, scheduled_time, interviewer, location_or_link, applications(id, candidates(name, email), jobs(title, recruiters(org_name))))"
+      "id, offset_label, interviews!inner(id, status, scheduled_time, interviewer, location_or_link, applications(id, candidates(name, email), jobs(title, recruiters(org_name))))"
     )
     .eq("sent", false)
     .lte("fire_at", new Date().toISOString());
