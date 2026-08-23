@@ -413,3 +413,72 @@ a live status line — the "skeleton loaders with live progress" requirement.
 - Interviews embed `interview_scorecards` via PostgREST nesting; everything
   recruiter-side is RLS-scoped; the public schedule endpoints authorize
   solely by the unguessable token (service-role lookups).
+
+---
+
+# Week 5 — Reminder Engine + Gmail Inbox Intake
+
+## Track A — Reminder engine (VERIFIED LIVE)
+
+### POST /api/reminders/run — exactly-once semantics
+- Auth: `x-worker-secret` timing-safe compared against
+  CLOUDFLARE_WORKER_SHARED_SECRET (401 without).
+- Flow: query due+unsent rows joined through interviews (status must be
+  'scheduled' — cancelled/completed skipped and counted as skippedCancelled)
+  → **CLAIM atomically** (`UPDATE … WHERE sent = false RETURNING id`) →
+  compose from the recruiter's reminder template (own copy else shared
+  formal default) → **Resend BATCH** endpoint → email_log each send.
+  If the batch fails, claimed rows are UNCLAIMED so the next run retries —
+  sent-once-or-retry, never silently lost, never duplicated.
+- **Verified live (2026-08-23):** 4 synthetic past-due reminders, two
+  CONCURRENT invocations → run1 {claimed:4, sent:4}, run2 {claimed:0,
+  "raced with another run"}, third run {due:0}. DB: 4/4 sent with sent_at,
+  4 email_log rows. (Found + fixed two bugs during verification: a duplicate
+  column in the embed select, and the embed key being `interviews` —
+  relation name — not `interview`. Also learned Resend 422s reserved
+  domains like example.com — use real-looking addresses in tests.)
+
+### Cloudflare Worker (`worker/`) — isolation-first, pending `wrangler login`
+- `worker/src/index.ts`: MODE unset/log-only = logs every cron fire, touches
+  nothing. MODE=live + APP_URL + SHARED_SECRET secrets = 15-min cron →
+  /api/reminders/run, 10-min cron → /api/mailbox/poll, both with the
+  shared-secret header.
+- Deploy steps (needs one-time `wrangler login`):
+  `cd worker && wrangler deploy` (isolation) → `wrangler tail` to confirm
+  cron fires → `wrangler secret put APP_URL` (https://clearhire-rho.vercel.app),
+  `wrangler secret put SHARED_SECRET` (value in .env.local
+  CLOUDFLARE_WORKER_SHARED_SECRET), `wrangler secret put MODE` = live →
+  `wrangler deploy`.
+
+## Track B — Gmail intake (built; needs Google OAuth client creds)
+
+### OAuth, minimum scope
+- `/api/gmail/connect` → Google consent with **gmail.readonly +
+  gmail.labels only**; `/api/gmail/callback` exchanges for a refresh token
+  stored **encrypted** (pgcrypto PGP sym, key from GMAIL_ENCRYPTION_KEY env)
+  via `gmail_store_token`; plaintext never touches the DB or client.
+  Encryption key + worker secret generated and set on Vercel + .env.local.
+- Setup needed once (RUNNING_NOTES below has the console steps): create
+  GMAIL_CLIENT_ID/SECRET with redirect URI
+  `https://clearhire-rho.vercel.app/api/gmail/callback`.
+
+### POST /api/mailbox/poll — idempotent, matching, never drops
+- Worker-secret OR recruiter session. Per connection: refresh-token →
+  access token → recent `has:attachment` messages → skip already-processed
+  (processed_emails log) → extract first PDF/DOCX attachment → match to an
+  OPEN job (exact title → normalized title → ≥50% title-word overlap) →
+  ingest via the shared pipeline (`lib/intake.ts`: text → private bucket →
+  candidate (duplicate-flagged) → application → staged cv_extractions).
+- Unmatched: CV preserved in the bucket + row in `unmatched_emails`
+  (surfaced in Settings) — flagged for manual assignment, never dropped.
+- Settings page: Gmail card (connect / status / last polled / Poll now /
+  unmatched list). Until the worker is live, polls run on demand from there.
+
+## Definition of done status
+- ✅ 4 reminder rows on scheduling (Week 4) + fired once-and-only-once
+  under concurrent double-invoke (live-tested this week)
+- ⏳ Worker isolation deploy + cron confirmation → blocked on
+  `wrangler login` (one command, then I finish it)
+- ⏳ Email→application within one polling cycle → blocked on Google OAuth
+  client credentials (GMAIL_CLIENT_ID/SECRET)
+- ✅ Tokens encrypted at rest; OAuth scope is read+label only
