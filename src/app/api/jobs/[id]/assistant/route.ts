@@ -283,9 +283,11 @@ async function cvScan(
   candidates: BlindCandidate[],
   query: string
 ): Promise<{ matches: { rank: number; quote: string }[] } | null> {
+  // Corpus stays small: Groq's free tier counts prompt + max_tokens
+  // against a per-minute ceiling, so 8 CVs × 2200 chars ≈ 4.4k tokens.
   const eligible = candidates
     .filter((c) => c.status !== "rejected" && c.score !== null)
-    .slice(0, 12);
+    .slice(0, 8);
   if (eligible.length === 0) return null;
 
   const admin = createAdminClient();
@@ -300,14 +302,14 @@ async function cvScan(
 
   const corpus = eligible
     .map((c) => {
-      const text = (textByApp.get(c.applicationId) ?? "").slice(0, 2600);
+      const text = (textByApp.get(c.applicationId) ?? "").slice(0, 2200);
       return `CANDIDATE #${c.rank}:\n${text}`;
     })
     .join("\n\n---\n\n");
 
   const out = await chatJSON<{ matches?: { rank?: number; found?: boolean; quote?: string }[] }>({
     purpose: "cv-scan",
-    maxTokens: 1500,
+    maxTokens: 1200,
     user: `Search these CV extracts and find evidence matching: "${query}".
 
 Rules: only report candidates with a clear, quotable piece of evidence. The quote must be copied from the text (max 140 chars, trimmed sensibly). Ignore candidates with no evidence. Ranks are numbers like 4.

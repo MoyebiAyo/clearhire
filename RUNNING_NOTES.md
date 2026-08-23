@@ -623,3 +623,14 @@ instant failover), the chain moves to `groq-backup` automatically — no code
 or deploy needed at failure time. Verified: backup key live-valid (JSON mode),
 and a scratch replica of the chain with a dead primary key failed over and
 answered via the backup. Rotate both keys post-hackathon (pasted in chat).
+
+## Exam-generation "network error" — root cause + fix
+Symptom: Copilot exam setup failed with a generic network error. Root cause:
+Groq's free tier counts PROMPT + max_tokens against an ~8k tokens-per-minute
+ceiling; the generate route requested max_tokens 8000 + JD prompt → instantly
+rejected ("Request too large… TPM: Limit 8000") on BOTH keys, and the route
+let the error escape as an HTML 500 (client JSON parse → "network error").
+Fixes: chunks 25→12 questions with max_tokens 4200 (live-timed: 12 questions,
+4.7s, 1.9k tokens — far under the ceiling); route returns a clean JSON error
+(aiUserMessage) instead of 500 HTML; cv_scan corpus trimmed 12×2600→8×2200
+chars, maxTokens 1200 (same trap). Not a Vercel/timeout issue.

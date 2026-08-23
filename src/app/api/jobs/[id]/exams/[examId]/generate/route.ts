@@ -1,20 +1,20 @@
 import { NextResponse } from "next/server";
 
-import { chatJSON } from "@/lib/ai";
+import { aiUserMessage, chatJSON } from "@/lib/ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
 
 /**
- * POST /api/jobs/[id]/exams/[examId]/generate?limit=25 — grow the draft
+ * POST /api/jobs/[id]/exams/[examId]/generate?limit=12 — grow the draft
  * exam's question bank one chunk per call (serverless-safe, mirrors the
  * extract/score pattern). The client loops until `remaining` hits 0.
  *
- * Questions are generated from the job description + the cached role
- * requirements, calibrated to the seniority the JD states (e.g. "3+ years"
- * → mid/senior-level material). Validated in code: exactly 4 non-empty
- * options, correct_index 0–3, no duplicates.
+ * Token budget: Groq's free tier counts prompt + max_tokens against a
+ * ~8k tokens-per-minute ceiling, so chunks stay small (≤15 questions,
+ * max_tokens 4200) to stay under it — speed comes from the client loop,
+ * not one giant call.
  */
 
 interface GeneratedQuestion {
@@ -31,7 +31,7 @@ export async function POST(
 ) {
   const { id, examId } = await params;
   const url = new URL(request.url);
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 25), 1), 25);
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit") ?? 12), 1), 15);
 
   const supabase = await createClient();
   const {
@@ -87,10 +87,12 @@ export async function POST(
     ? JSON.stringify(job.requirements_cache).slice(0, 2500)
     : "(no cached requirements — rely on the job description)";
 
-  const result = await chatJSON<{ questions?: GeneratedQuestion[] }>({
-    purpose: "exam-generate",
-    maxTokens: 8000,
-    user: `You are building a multiple-choice skills assessment for a job. Generate EXACTLY ${toGenerate} questions.
+  let result: { questions?: GeneratedQuestion[] };
+  try {
+    result = await chatJSON<{ questions?: GeneratedQuestion[] }>({
+      purpose: "exam-generate",
+      maxTokens: 4200,
+      user: `You are building a multiple-choice skills assessment for a job. Generate EXACTLY ${toGenerate} questions.
 
 JOB TITLE: ${job.title}
 
@@ -106,9 +108,17 @@ Rules:
 - Mix difficulties: roughly 30% easy, 45% medium, 25% hard.
 - Each question: 4 options, exactly ONE clearly correct, three plausible-but-wrong distractors. No "all of the above", no trick wording.
 - Questions must be answerable by a qualified candidate WITHOUT seeing your options list first (self-contained wording).
+- Keep questions and options concise — one to two sentences each.
 
 Return JSON: {"questions": [{"topic": string, "difficulty": "easy"|"medium"|"hard", "question": string, "options": [string, string, string, string], "correct_index": 0-3}]}`,
-  });
+    });
+  } catch (err) {
+    // Clean JSON error so the client never sees an HTML 500 "network error".
+    return NextResponse.json(
+      { error: aiUserMessage(err) },
+      { status: 500 }
+    );
+  }
 
   const raw = (result.questions ?? []).slice(0, toGenerate);
   const valid: {

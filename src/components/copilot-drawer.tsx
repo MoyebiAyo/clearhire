@@ -192,11 +192,12 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
       }
       const examId: string = created.exam.id;
 
-      // 2. Generate the question bank in chunks (serverless-safe).
+      // 2. Generate the question bank in small chunks (serverless- AND
+      // rate-limit-safe: Groq's free tier caps prompt+max_tokens per minute).
       let total = 0;
-      for (let i = 0; i < 8; i++) {
+      for (let i = 0; i < 10; i++) {
         setExamProgress(`Writing questions from the job description… ${total}/${cfg.bankSize}`);
-        const g = await fetch(`/api/jobs/${jobId}/exams/${examId}/generate?limit=25`, {
+        const g = await fetch(`/api/jobs/${jobId}/exams/${examId}/generate?limit=12`, {
           method: "POST",
         });
         const gb = await g.json();
