@@ -52,7 +52,7 @@ export async function POST(
 
   await supabase
     .from("applications")
-    .update({ status: "interviewed" })
+    .update({ status: "interviewed", status_changed_at: new Date().toISOString() })
     .eq("id", interview.application_id);
 
   return NextResponse.json({ saved: true }, { status: 201 });

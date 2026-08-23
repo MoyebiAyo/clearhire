@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   CalendarDays,
   Eye,
@@ -15,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Modal } from "@/components/ui/modal";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { RunProgress } from "@/components/job-stage";
 import { InterviewActions } from "@/components/interview-actions";
@@ -137,6 +139,7 @@ export function Shortlist({
   const [sortKey, setSortKey] = useState<SortKey>("total");
   const [onlyHardGaps, setOnlyHardGaps] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [dupId, setDupId] = useState<string | null>(null);
 
   const busyLine = useRotatingLine(
     busy?.kind === "score" ? SCORE_LINES : EXTRACT_LINES,
@@ -314,6 +317,7 @@ export function Shortlist({
                 onReveal={() => reveal(row)}
                 onDetails={() => setOpenId(row.id)}
                 onDownload={() => downloadCv(row)}
+                onDuplicate={() => setDupId(row.id)}
               />
             ))}
           </div>
@@ -335,7 +339,86 @@ export function Shortlist({
           onDownload={() => downloadCv(openRow)}
         />
       )}
+
+      {dupId && (
+        <DuplicateDialog
+          row={rows.find((r) => r.id === dupId)!}
+          onClose={() => setDupId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+function DuplicateDialog({
+  row,
+  onClose,
+}: {
+  row: ShortlistRow;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState<"keep_both" | "use_this" | null>(null);
+
+  async function resolve(action: "keep_both" | "use_this") {
+    setBusy(action);
+    try {
+      const res = await fetch(`/api/applications/${row.id}/resolve-duplicate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error ?? "Couldn't resolve.");
+        return;
+      }
+      toast.success(
+        action === "keep_both"
+          ? "Kept both applications — flag cleared"
+          : `Merged — removed ${body.removed} older application${body.removed === 1 ? "" : "s"}, this one is canonical`
+      );
+      onClose();
+      router.refresh();
+    } catch {
+      toast.error("Network error — please try again.");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose} title="Resolve possible duplicate">
+      <div className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          <strong className="text-foreground">{row.email}</strong> applied to
+          this job more than once. Both applications are kept until you
+          decide — nothing merges silently.
+        </p>
+        <div className="space-y-2">
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            loading={busy === "use_this"}
+            disabled={busy !== null}
+            onClick={() => resolve("use_this")}
+            title="Removes the earlier application(s) from this job (their interviews and reminders go with them) and keeps this one."
+          >
+            Use this application — merge the rest into it
+          </Button>
+          <Button
+            className="w-full justify-start"
+            variant="outline"
+            loading={busy === "keep_both"}
+            disabled={busy !== null}
+            onClick={() => resolve("keep_both")}
+            title="Both applications stay; the duplicate flag is dismissed."
+          >
+            Keep both — they're separate applications
+          </Button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -347,6 +430,7 @@ function ShortlistCard({
   onReveal,
   onDetails,
   onDownload,
+  onDuplicate,
 }: {
   row: ShortlistRow;
   weights: RubricWeights;
@@ -355,6 +439,7 @@ function ShortlistCard({
   onReveal: () => void;
   onDetails: () => void;
   onDownload: () => void;
+  onDuplicate: () => void;
 }) {
   const s = row.score;
   return (
@@ -390,9 +475,17 @@ function ShortlistCard({
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {row.flaggedDuplicate && (
-                <Badge variant="warning" title="This email already applied to this job — the earlier application was kept.">
-                  Duplicate — applied to this job
-                </Badge>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDuplicate();
+                  }}
+                  className="rounded-full border border-transparent bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning transition-colors hover:border-warning/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  title="This email applied to this job before — click to merge or keep both."
+                >
+                  Duplicate — applied to this job · resolve
+                </button>
               )}
               {!row.flaggedDuplicate && (row.returningJobs?.length ?? 0) > 0 && (
                 <Badge

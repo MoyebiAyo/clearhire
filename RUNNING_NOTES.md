@@ -491,3 +491,68 @@ a live status line — the "skeleton loaders with live progress" requirement.
   01:15 reminders → HTTP 200 {due:1, claimed:1, sent:1} (a real reminder
   fired end-to-end); 01:20 mailbox → HTTP 200 {connections:0} (correct —
   no Gmail connected yet). Crons: */15 reminders, */10 mailbox poll.
+
+---
+
+# Week 6 — Pipeline, Analytics, Demo Prep (final week)
+
+## What was built
+
+### Kanban pipeline — `/pipeline` (nav: Pipeline)
+- All-jobs board + per-job filter. Columns: Applied → Screened →
+  Shortlisted → Interview Scheduled → Interviewed → Offer/Rejected
+  (combined final column, badges distinguish). Column counts, hover a
+  column title for a stage explanation.
+- Native drag-and-drop (drop-zone highlight, dragged card dims) PLUS a
+  per-card stage dropdown — the accessible path. Optimistic updates with
+  rollback + toast on failure.
+- Moving to Rejected opens the Week 4 rejection drafting flow (dialog).
+- Statuses now advance automatically where it makes sense: scoring →
+  'screened', scheduling → 'interview_scheduled', scorecard →
+  'interviewed' (each sets the new applications.status_changed_at).
+
+### Duplicate resolution (spec 2.6 UI)
+- The "Duplicate — applied to this job" badge on shortlist cards is now a
+  button opening a decision dialog: **Use this application** (merges:
+  removes the earlier same-candidate-same-job applications, cascades their
+  interviews/reminders, this one becomes canonical) or **Keep both**
+  (dismisses the flag). Nothing merges silently.
+
+### Analytics — `/analytics` (nav: Analytics)
+- Source split (email vs upload), stage drop-off funnel (highest stage
+  reached per application, cumulative %), time-to-hire per job + averaged
+  (applied_at → status_changed_at on offer). Pure CSS bars; each chart ends
+  with a computed plain-English takeaway line.
+
+### Demo tooling (Phase 8)
+- **Fire reminder** button on scheduled candidates' shortlist cards:
+  session-auth'd POST /api/demo/reminder arms the earliest unsent future
+  reminder (fire_at → now) and runs the exact same engine
+  (lib/reminders-runner.ts) the worker cron uses — demo-safe, zero
+  database surgery. (The runner was refactored out of the route into
+  lib/reminders-runner.ts, shared with /api/reminders/run.)
+- `docs/DEMO.md` — the minute-by-minute 3-minute script + the demo JD.
+- `docs/SUBMISSION.md` — problem, workflow, tools, REAL sample I/O (a real
+  CV's extraction + scoring JSON pulled from the live DB), and the testing
+  evidence (blind-audit, exactly-once concurrency test, RLS isolation,
+  worker isolation-first record, security checklist).
+
+### Hardening pass (verified 2026-08-23)
+- cvs bucket public:false ✓ · invalid-key reads blocked on all 14 tables ✓
+  (RLS enabled by migrations 0001-0006 on every table) · blind scoring
+  server-enforced + audit-logged ✓ · Gmail tokens pgcrypto-encrypted,
+  scope read+label ✓ · all 11 spec Part 5 routes live (plus apps/[id],
+  resolve-duplicate, demo/reminder, templates/[id], gmail connect/callback)
+  ✓ · service-role key server-only (build-time guard) ✓.
+
+## Migration 0006
+applications.status_changed_at (documented extension) — powers
+time-to-hire; set by every status-changing flow.
+
+## Definition of done checks (run before the demo)
+1. Follow docs/DEMO.md setup (JD + 10 test CVs) → run the script top to
+   bottom without touching the database.
+2. Pipeline: drag a card between stages; drop one on Offer/Rejected;
+   counts update; analytics reflect the moves.
+3. Duplicate badge → resolve both ways on a throwaway pair.
+4. Fire reminder sends a real email once.

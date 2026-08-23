@@ -119,7 +119,7 @@ Context: job_title=${job.title}, sender org=${recruiterName}.`;
 
   const { error: statusError } = await supabase
     .from("applications")
-    .update({ status: "rejected" })
+    .update({ status: "rejected", status_changed_at: new Date().toISOString() })
     .eq("id", row.id);
   if (statusError) {
     return NextResponse.json({ error: statusError.message }, { status: 500 });

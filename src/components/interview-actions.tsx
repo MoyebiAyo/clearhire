@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarPlus, ClipboardCopy, Star, ThumbsDown } from "lucide-react";
+import { BellRing, CalendarPlus, ClipboardCopy, Star, ThumbsDown } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -28,8 +28,37 @@ export function InterviewActions({ row }: { row: ShortlistRow }) {
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [scoreOpen, setScoreOpen] = useState(false);
+  const [firing, setFiring] = useState(false);
 
   const interview = row.interview;
+
+  /** Demo-safe time fast-forward (Phase 8): arm + fire the next reminder. */
+  async function fireReminder() {
+    setFiring(true);
+    try {
+      const res = await fetch("/api/demo/reminder", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ application_id: row.id }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error ?? "Couldn't fire the reminder.");
+        return;
+      }
+      const r = body.result ?? {};
+      toast.success(
+        r.sent > 0
+          ? `Reminder fired — ${r.sent} sent via Resend batch ✉️`
+          : "Reminder armed, but nothing sent — check the worker/engine logs."
+      );
+      router.refresh();
+    } catch {
+      toast.error("Network error — please try again.");
+    } finally {
+      setFiring(false);
+    }
+  }
 
   return (
     <>
@@ -59,6 +88,17 @@ export function InterviewActions({ row }: { row: ShortlistRow }) {
                 }}
               >
                 <ClipboardCopy aria-hidden /> Copy link
+              </Button>
+            )}
+            {interview.scheduled_time && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={fireReminder}
+                loading={firing}
+                title="Demo action: fast-forwards the next unsent reminder to now and runs the engine — no database surgery."
+              >
+                <BellRing aria-hidden /> Fire reminder
               </Button>
             )}
           </>
@@ -346,7 +386,7 @@ function localToIso(local: string): string {
 
 // ── Reject ───────────────────────────────────────────────────────────────────
 
-function RejectDialog({
+export function RejectDialog({
   applicationId,
   candidateName,
   onClose,

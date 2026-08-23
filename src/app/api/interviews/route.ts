@@ -87,5 +87,15 @@ export async function POST(request: Request) {
     );
   }
 
+  // Scheduling advances the pipeline (Kanban: Interview Scheduled).
+  await supabase
+    .from("applications")
+    .update({
+      status: "interview_scheduled",
+      status_changed_at: new Date().toISOString(),
+    })
+    .eq("id", applicationId)
+    .in("status", ["applied", "screened", "shortlisted"]);
+
   return NextResponse.json({ interview, remindersCreated }, { status: 201 });
 }

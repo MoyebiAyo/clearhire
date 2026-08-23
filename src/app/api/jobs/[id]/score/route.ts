@@ -196,6 +196,13 @@ Return strict JSON:
       });
       if (error) throw new Error(error.message);
 
+      // A scored application has cleared screening — advance the pipeline.
+      await supabase
+        .from("applications")
+        .update({ status: "screened", status_changed_at: new Date().toISOString() })
+        .eq("id", item.applicationId)
+        .eq("status", "applied");
+
       return {
         application_id: item.applicationId,
         email: item.email,
