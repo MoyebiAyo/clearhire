@@ -60,6 +60,17 @@ function providers(): Provider[] {
       model: DEFAULT_MODEL,
     });
   }
+  // Second Groq key on the same free tier: when the first key's quota or
+  // rate limit is exhausted (429s surviving all retries), the chain fails
+  // over to this one automatically — same model, same prompts.
+  if (process.env.GROQ_FALLBACK_API_KEY) {
+    list.push({
+      name: "groq-backup",
+      baseUrl: process.env.GROQ_BASE_URL || DEFAULT_BASE_URL,
+      apiKey: process.env.GROQ_FALLBACK_API_KEY,
+      model: DEFAULT_MODEL,
+    });
+  }
   if (process.env.FALLBACK_AI_BASE_URL && process.env.FALLBACK_AI_API_KEY) {
     list.push({
       name: "fallback",
