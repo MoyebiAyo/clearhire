@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { buildIcs, emailConfigured, logEmail, sendEmail } from "@/lib/email";
 import { createReminderJobs } from "@/lib/reminders";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { one } from "@/lib/utils";
 
 /**
  * Public, token-authorized scheduling endpoints (the token IS the
@@ -54,12 +55,18 @@ export async function GET(
   if (!row) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
-  const app = row.applications;
+  const app = one<{
+    id: string;
+    candidates: unknown;
+    jobs: unknown;
+  }>(row.applications);
+  const candidate = one<{ name: string | null; email: string }>(app?.candidates);
+  const jobRow = one<{ title: string; recruiters: unknown }>(app?.jobs);
+  const company = one<{ org_name: string | null }>(jobRow?.recruiters)?.org_name ?? "the hiring team";
   return NextResponse.json({
-    job_title: app?.jobs?.[0]?.title ?? "your interview",
-    company: app?.jobs?.[0]?.recruiters?.[0]?.org_name,
-    candidate_first_name:
-      app?.candidates?.[0]?.name?.split(" ")[0] || "there",
+    job_title: jobRow?.title ?? "your interview",
+    company,
+    candidate_first_name: candidate?.name?.split(" ")[0] || "there",
     interviewer: row.interviewer,
     location_or_link: row.location_or_link,
     slots: (row.offered_slots ?? []).filter((s) => new Date(s).getTime() > Date.now()),
@@ -105,10 +112,10 @@ export async function POST(
   await createReminderJobs(admin, row.id, new Date(slot));
 
   // Confirmation email with .ics — non-blocking on failure.
-  const app = row.applications;
-  const candidateEmail = app?.candidates?.[0]?.email;
-  const jobTitle = app?.jobs?.[0]?.title ?? "your interview";
-  const company = app?.jobs?.[0]?.recruiters?.[0]?.org_name ?? "the hiring team";
+  const app2 = one<{ id: string; candidates: unknown; jobs: unknown }>(row.applications);
+  const candidateEmail = one<{ email: string }>(app2?.candidates)?.email;
+  const jobTitle = one<{ title: string }>(app2?.jobs)?.title ?? "your interview";
+  const company = one<{ org_name: string | null }>(one<{ recruiters: unknown }>(app2?.jobs)?.recruiters)?.org_name ?? "the hiring team";
   let emailSent = false;
   if (candidateEmail && emailConfigured()) {
     const ics = buildIcs({
@@ -130,7 +137,7 @@ export async function POST(
     if (result.ok) {
       emailSent = true;
       await logEmail(admin, {
-        application_id: app!.id,
+        application_id: app2!.id,
         type: "confirmation",
         to_email: candidateEmail,
         subject: `Confirmed: your ${jobTitle} interview`,

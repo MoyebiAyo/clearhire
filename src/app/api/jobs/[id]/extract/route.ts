@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { aiUserMessage, chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
 import { parseExtraction } from "@/lib/ai-schemas";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 
 export const maxDuration = 60;
 
@@ -75,7 +76,7 @@ export async function POST(
     )
     .map((row) => ({
       applicationId: row.id,
-      email: row.candidates?.[0]?.email ?? null,
+      email: one<{ email: string }>(row.candidates)?.email ?? null,
       extractionId: row.cv_extractions![0].id,
       rawText: row.cv_extractions![0].raw_text!.slice(0, MAX_RAW_CHARS),
     }));

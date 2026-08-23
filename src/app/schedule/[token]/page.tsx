@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { SchedulePicker } from "@/components/schedule-picker";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { one } from "@/lib/utils";
 
 export const metadata = { title: "Pick your interview time" };
 
@@ -38,14 +39,17 @@ export default async function SchedulePage({
 
   if (!interview) notFound();
 
-  const app = interview.applications;
+  const app = one<{ candidates: unknown; jobs: unknown }>(interview.applications);
+  const cand = one<{ name: string | null }>(app?.candidates);
+  const jobRow = one<{ title: string; recruiters: unknown }>(app?.jobs);
+  const company = one<{ org_name: string | null }>(jobRow?.recruiters)?.org_name ?? "the hiring team";
 
   return (
     <SchedulePicker
       token={token}
-      jobTitle={app?.jobs?.[0]?.title ?? "your interview"}
-      company={app?.jobs?.[0]?.recruiters?.[0]?.org_name ?? "the hiring team"}
-      firstName={app?.candidates?.[0]?.name?.split(" ")[0] || "there"}
+      jobTitle={jobRow?.title ?? "your interview"}
+      company={company}
+      firstName={cand?.name?.split(" ")[0] || "there"}
       interviewer={interview.interviewer}
       location={interview.location_or_link}
       slots={(interview.offered_slots ?? []).filter(

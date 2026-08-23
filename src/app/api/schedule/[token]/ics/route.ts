@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { buildIcs } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { one } from "@/lib/utils";
 
 /**
  * GET /api/schedule/[token]/ics — token-authorized .ics download for the
@@ -31,7 +32,7 @@ export async function GET(
     return NextResponse.json({ error: "not_scheduled" }, { status: 404 });
   }
 
-  const title = interview.applications?.jobs?.[0]?.title ?? "Interview";
+  const title = one<{ title: string }>(interview.applications?.jobs)?.title ?? "Interview";
   const ics = buildIcs({
     uid: `interview-${interview.id}@clearhire`,
     start: new Date(interview.scheduled_time),

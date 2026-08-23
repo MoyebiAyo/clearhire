@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { aiConfigured } from "@/lib/ai";
 import { createClient } from "@/lib/supabase/server";
 import type { Gap } from "@/lib/types";
-import { cn, formatDate } from "@/lib/utils";
+import { cn, formatDate, one } from "@/lib/utils";
 
 export default async function JobDetailPage({
   params,
@@ -87,13 +87,16 @@ export default async function JobDetailPage({
   const rows = ((appRows ?? []) as unknown as RawRow[]).map((r) => {
     const score = r.scores?.[0];
     const interview = r.interviews?.[0];
+    const cand = one<{ name: string | null; email: string; source: string | null }>(
+      r.candidates
+    );
     return {
       id: r.id,
       appliedAt: r.applied_at,
       revealed: r.revealed_at !== null,
-      name: r.candidates?.[0]?.name ?? null,
-      email: r.candidates?.[0]?.email ?? "(unknown)",
-      source: (r.candidates?.[0]?.source as "upload" | "email" | null) ?? null,
+      name: cand?.name ?? null,
+      email: cand?.email ?? "(unknown)",
+      source: (cand?.source as "upload" | "email" | null) ?? null,
       flaggedDuplicate: r.flagged_duplicate,
       extracted: r.cv_extractions?.[0]?.skills !== null && r.cv_extractions !== null,
       extractError: r.cv_extractions?.[0]?.extract_error ?? null,

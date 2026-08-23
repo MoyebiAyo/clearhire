@@ -4,6 +4,7 @@ import { aiUserMessage, chatJSON } from "@/lib/ai";
 import { emailConfigured, logEmail, renderTemplate, sendEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 
 /**
  * POST /api/applications/[id]/reject
@@ -42,17 +43,17 @@ export async function POST(
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
   }
 
-  const candidate = (row.candidates as unknown as { name: string | null; email: string } | null);
-  const job = (row.jobs as unknown as
-    | { title: string; recruiters: { org_name: string | null }[] | null }
-    | null);
+  const candidate = one<{ name: string | null; email: string }>(row.candidates);
+  const job = one<{ title: string; recruiters: unknown }>(row.jobs);
   if (!candidate?.email || !job) {
     return NextResponse.json({ error: "Missing candidate or job" }, { status: 409 });
   }
 
   const firstName = candidate.name?.split(" ")[0] || candidate.email.split("@")[0];
   const recruiterName =
-    job.recruiters?.[0]?.org_name || user.email?.split("@")[0] || "The hiring team";
+    one<{ org_name: string | null }>(job.recruiters)?.org_name ||
+    user.email?.split("@")[0] ||
+    "The hiring team";
 
   const gaps = ((row.scores as unknown as { gaps: { requirement: string; severity: string }[] | null }[] | null)?.[0]?.gaps ?? [])
     .filter((g) => g.severity !== "hard")

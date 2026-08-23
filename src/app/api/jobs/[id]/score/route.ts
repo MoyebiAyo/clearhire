@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { aiUserMessage, chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
 import { parseRequirements, parseScoring, type Requirement } from "@/lib/ai-schemas";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 
 export const maxDuration = 60;
 
@@ -123,7 +124,7 @@ ${job.jd_text}`,
       const ext = row.cv_extractions![0];
       return {
         applicationId: row.id,
-        email: row.candidates?.[0]?.email ?? null,
+        email: one<{ email: string }>(row.candidates)?.email ?? null,
         // BLIND PAYLOAD — identifying fields deliberately absent.
         profile: {
           skills: ext.skills ?? [],

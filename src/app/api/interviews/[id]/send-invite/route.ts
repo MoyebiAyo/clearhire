@@ -4,6 +4,7 @@ import { aiUserMessage, chatJSON } from "@/lib/ai";
 import { emailConfigured, formatSlots, logEmail, renderTemplate, sendEmail } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { one } from "@/lib/utils";
 
 /**
  * POST /api/interviews/[id]/send-invite
@@ -39,16 +40,18 @@ export async function POST(
     return NextResponse.json({ error: "Interview not found" }, { status: 404 });
   }
 
-  const app = row.applications as unknown as {
+  const app = one<{
     id: string;
-    candidates: { name: string | null; email: string }[] | null;
-    jobs: { title: string; recruiters: { org_name: string | null }[] | null }[] | null;
-  } | null;
-  const candidate = app?.candidates?.[0];
-  const job = app?.jobs?.[0];
-  if (!candidate?.email || !job) {
+    candidates: unknown;
+    jobs: unknown;
+  }>((row as { applications?: unknown }).applications);
+  const candidate = one<{ name: string | null; email: string }>(app?.candidates);
+  const jobRow = one<{ title: string; recruiters: unknown }>(app?.jobs);
+  const recruiterOrg = one<{ org_name: string | null }>(jobRow?.recruiters)?.org_name;
+  if (!candidate?.email || !jobRow) {
     return NextResponse.json({ error: "Missing candidate or job" }, { status: 409 });
   }
+  const job = jobRow;
 
   const { data: template } = await supabase
     .from("email_templates")
@@ -66,9 +69,7 @@ export async function POST(
   const fields = {
     candidate_name: candidate.name?.split(" ")[0] || candidate.email.split("@")[0],
     recruiter_name:
-      (app?.jobs?.[0]?.recruiters?.[0]?.org_name as string | null) ||
-      user.email?.split("@")[0] ||
-      "The hiring team",
+      recruiterOrg || user.email?.split("@")[0] || "The hiring team",
     job_title: job.title,
     proposed_times: formatSlots(times),
     location_or_link: row.location_or_link ?? "",
