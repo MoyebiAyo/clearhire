@@ -30,7 +30,10 @@ export interface IngestInput {
 export interface IngestResult {
   status: "created" | "needs_email" | "failed";
   email?: string;
+  /** True duplicate: this email already applied to THIS job. */
   duplicate?: boolean;
+  /** Returning candidate: known from OTHER jobs, new to this one. */
+  returning?: boolean;
   message?: string;
   applicationId?: string;
   rawText?: string;
@@ -98,16 +101,31 @@ async function persistCv(args: {
     .select("id")
     .eq("email", email)
     .maybeSingle();
-  const duplicate = Boolean(existing);
-  const candidateId =
-    existing?.id ??
-    (
-      await admin
-        .from("candidates")
-        .insert({ name, email, source })
-        .select("id")
-        .single()
-    ).data!.id;
+
+  // Returning vs true duplicate (spec 2.6): an email known from OTHER jobs
+  // is a returning candidate (linked, not flagged); the same email applying
+  // to THIS job twice is the real duplicate.
+  let duplicate = false;
+  let returning = false;
+  let candidateId = existing?.id ?? null;
+  if (existing) {
+    const { data: priorApp } = await admin
+      .from("applications")
+      .select("id")
+      .eq("candidate_id", existing.id)
+      .eq("job_id", jobId)
+      .maybeSingle();
+    if (priorApp) duplicate = true;
+    else returning = true;
+  }
+  if (!candidateId) {
+    const inserted = await admin
+      .from("candidates")
+      .insert({ name, email, source })
+      .select("id")
+      .single();
+    candidateId = inserted.data!.id;
+  }
 
   const storagePath = `${jobId}/${randomUUID()}-${filename.replace(/[^\w.\-]+/g, "_")}`;
   const { error: storageErr } = await admin.storage
@@ -139,6 +157,7 @@ async function persistCv(args: {
     status: "created",
     email,
     duplicate,
+    returning,
     applicationId: application.id,
   };
 }

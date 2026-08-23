@@ -91,6 +91,9 @@ export interface CvUploadResult {
   filename: string;
   status: "created" | "needs_email" | "failed";
   email?: string;
+  /** Same email already applied to this job. */
   duplicate?: boolean;
+  /** Known candidate, new to this job (applied to other jobs before). */
+  returning?: boolean;
   message?: string;
 }

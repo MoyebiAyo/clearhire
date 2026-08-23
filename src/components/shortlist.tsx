@@ -60,6 +60,8 @@ export interface ShortlistRow {
   extractError: string | null;
   hasCv: boolean;
   status: string;
+  /** Job titles this candidate applied to previously (other jobs). */
+  returningJobs?: string[];
   score: ShortlistScore | null;
   interview: InterviewInfo | null;
   templates: TemplateOption[];
@@ -388,7 +390,21 @@ function ShortlistCard({
             </div>
             <div className="mt-1.5 flex flex-wrap gap-1">
               {row.flaggedDuplicate && (
-                <Badge variant="warning">Possible duplicate</Badge>
+                <Badge variant="warning" title="This email already applied to this job — the earlier application was kept.">
+                  Duplicate — applied to this job
+                </Badge>
+              )}
+              {!row.flaggedDuplicate && (row.returningJobs?.length ?? 0) > 0 && (
+                <Badge
+                  variant="default"
+                  title={`Known from: ${row.returningJobs!.join(", ")}`}
+                >
+                  Returning — applied to{" "}
+                  {row.returningJobs![0].length > 24
+                    ? `${row.returningJobs![0].slice(0, 24)}…`
+                    : row.returningJobs![0]}
+                  {row.returningJobs!.length > 1 ? ` +${row.returningJobs!.length - 1}` : ""}
+                </Badge>
               )}
               {row.extractError && (
                 <Badge variant="destructive" title={row.extractError}>

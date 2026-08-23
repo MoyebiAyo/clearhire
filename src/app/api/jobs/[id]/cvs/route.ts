@@ -82,6 +82,7 @@ export async function POST(
       status: outcome.status,
       email: outcome.email,
       duplicate: outcome.duplicate,
+      returning: outcome.returning,
       message: outcome.message,
     });
   }

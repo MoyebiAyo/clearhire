@@ -33,7 +33,7 @@ export default async function JobDetailPage({
   const { data: appRows } = await supabase
     .from("applications")
     .select(
-      "id, status, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), interviews(id, status, scheduled_time, schedule_token, interviewer, location_or_link, interview_scorecards(interviewer_rating, interviewer_notes))"
+      "id, status, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(id, name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), interviews(id, status, scheduled_time, schedule_token, interviewer, location_or_link, interview_scorecards(interviewer_rating, interviewer_notes))"
     )
     .eq("job_id", id)
     .order("applied_at", { ascending: false });
@@ -56,7 +56,7 @@ export default async function JobDetailPage({
     flagged_duplicate: boolean;
     revealed_at: string | null;
     cv_file_path: string | null;
-    candidates: { name: string | null; email: string; source: string | null }[] | null;
+    candidates: { id: string; name: string | null; email: string; source: string | null }[] | null;
     cv_extractions: { skills: string[] | null; extract_error: string | null }[] | null;
     scores:
       | {
@@ -87,11 +87,12 @@ export default async function JobDetailPage({
   const rows = ((appRows ?? []) as unknown as RawRow[]).map((r) => {
     const score = r.scores?.[0];
     const interview = r.interviews?.[0];
-    const cand = one<{ name: string | null; email: string; source: string | null }>(
+    const cand = one<{ id: string; name: string | null; email: string; source: string | null }>(
       r.candidates
     );
     return {
       id: r.id,
+      candidateId: cand?.id ?? null,
       appliedAt: r.applied_at,
       revealed: r.revealed_at !== null,
       name: cand?.name ?? null,
@@ -130,9 +131,39 @@ export default async function JobDetailPage({
           }
         : null,
       templates,
+      returningJobs: [] as string[],
       rank: 0,
     };
   });
+
+  // Returning candidates: prior applications by these candidates on OTHER
+  // jobs (RLS-scoped to this recruiter's jobs), used for the friendly
+  // "Returning — applied to X" badge — as opposed to a true duplicate,
+  // which is flagged_duplicate on this job's application.
+  const candidateIds = rows
+    .map((r) => r.candidateId)
+    .filter((v): v is string => Boolean(v));
+  const returningMap = new Map<string, string[]>();
+  if (candidateIds.length > 0) {
+    const { data: priorApps } = await supabase
+      .from("applications")
+      .select("candidate_id, jobs(title)")
+      .in("candidate_id", candidateIds)
+      .neq("job_id", id);
+    for (const pa of (priorApps ?? []) as unknown as {
+      candidate_id: string;
+      jobs: unknown;
+    }[]) {
+      const title = one<{ title: string }>(pa.jobs)?.title;
+      if (!title) continue;
+      const list = returningMap.get(pa.candidate_id) ?? [];
+      if (!list.includes(title)) list.push(title);
+      returningMap.set(pa.candidate_id, list);
+    }
+  }
+  for (const r of rows) {
+    r.returningJobs = r.candidateId ? (returningMap.get(r.candidateId) ?? []) : [];
+  }
 
   // Stable candidate numbers: rank by total score at page load.
   const rankedOrder = [...rows]

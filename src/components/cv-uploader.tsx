@@ -285,7 +285,10 @@ export function CvUploader({
                     </Badge>
                     <span className="text-xs text-muted-foreground">{r.email}</span>
                     {r.duplicate && (
-                      <Badge variant="warning">Existing candidate — linked &amp; flagged</Badge>
+                      <Badge variant="warning">Duplicate — already applied to this job</Badge>
+                    )}
+                    {r.returning && (
+                      <Badge variant="default">Returning candidate — linked</Badge>
                     )}
                   </>
                 )}
