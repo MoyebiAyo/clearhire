@@ -254,16 +254,20 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
     };
   } else if (action && action.name === "cv_scan" && typeof action.args?.query === "string") {
     const query = String(action.args.query).slice(0, 200);
-    resolved = await cvScan(supabase, candidates, query);
-    if (resolved) {
+    const scan = await cvScan(supabase, candidates, query);
+    if (scan) {
       // Deterministic answer composed in code from the evidence.
-      const found = (resolved as { matches: { rank: number; quote: string }[] }).matches;
+      const found = scan.matches;
+      const coverage =
+        scan.scanned < scan.total
+          ? ` (scanned the top ${scan.scanned} by score of ${scan.total} scored candidates)`
+          : "";
       return NextResponse.json({
         answer:
           found.length > 0
-            ? `Yes — ${found.length} candidate${found.length === 1 ? "" : "s"} match "${query}":\n\n` +
+            ? `Yes — ${found.length} candidate${found.length === 1 ? "" : "s"} match "${query}"${coverage}:\n\n` +
               found.map((f) => `• Candidate #${f.rank} — "${f.quote}"`).join("\n")
-            : `No candidate's CV mentions "${query}" in the extracted text.`,
+            : `No candidate's CV mentions "${query}" in the scanned text${coverage}.`,
         action: null,
       });
     }
@@ -273,22 +277,22 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
 }
 
 /**
- * Deep CV scan for questions the structured data can't answer: pulls raw
- * extraction text (capped) for up to 12 scored, active candidates and asks
- * one bounded model pass for evidence. Blind — quotes contain role/skill
- * text only; identity never enters the prompt.
+ * Deep CV scan for questions the structured data can't answer. Sends FULL
+ * stored CV text (up to 14k chars each — dense 2-pagers included, so page-2
+ * leadership/achievement evidence isn't lost), packed into requests of
+ * ≤24k chars (~6k tokens) that each stay under Groq's ~8k per-request
+ * ceiling. Up to 3 sequential calls in rank order; the shared backoff
+ * absorbs any rolling-window 429s between calls. Blind — quotes contain
+ * role/skill text only; identity never enters the prompt.
  */
 async function cvScan(
   supabase: Awaited<ReturnType<typeof createClient>>,
   candidates: BlindCandidate[],
   query: string
-): Promise<{ matches: { rank: number; quote: string }[] } | null> {
-  // Corpus stays small: Groq's free tier counts prompt + max_tokens
-  // against a per-minute ceiling, so 8 CVs × 2200 chars ≈ 4.4k tokens.
-  const eligible = candidates
-    .filter((c) => c.status !== "rejected" && c.score !== null)
-    .slice(0, 8);
+): Promise<{ matches: { rank: number; quote: string }[]; scanned: number; total: number } | null> {
+  const eligible = candidates.filter((c) => c.status !== "rejected" && c.score !== null);
   if (eligible.length === 0) return null;
+  const total = eligible.length;
 
   const admin = createAdminClient();
   const { data: rows } = await admin
@@ -300,29 +304,51 @@ async function cvScan(
     );
   const textByApp = new Map((rows ?? []).map((r) => [r.application_id, r.raw_text ?? ""]));
 
-  const corpus = eligible
-    .map((c) => {
-      const text = (textByApp.get(c.applicationId) ?? "").slice(0, 2200);
-      return `CANDIDATE #${c.rank}:\n${text}`;
-    })
-    .join("\n\n---\n\n");
+  // Rank-ordered FULL documents, packed into token-safe chunks.
+  const MAX_CHUNK_CHARS = 24_000;
+  const MAX_CALLS = 3;
+  const chunks: string[] = [];
+  let current = "";
+  for (const c of eligible) {
+    const doc = `CANDIDATE #${c.rank}:\n${textByApp.get(c.applicationId) ?? ""}`.slice(0, 14_500);
+    if (current.length > 0 && current.length + doc.length > MAX_CHUNK_CHARS) {
+      chunks.push(current);
+      if (chunks.length >= MAX_CALLS) break; // coverage is reported honestly
+      current = "";
+    }
+    current += (current ? "\n\n---\n\n" : "") + doc;
+  }
+  if (current && chunks.length < MAX_CALLS) chunks.push(current);
 
-  const out = await chatJSON<{ matches?: { rank?: number; found?: boolean; quote?: string }[] }>({
-    purpose: "cv-scan",
-    maxTokens: 1200,
-    user: `Search these CV extracts and find evidence matching: "${query}".
+  const rankSet = new Set(eligible.map((c) => c.rank));
+  const matches: { rank: number; quote: string }[] = [];
+  let scanned = 0;
+  for (const chunk of chunks) {
+    scanned += chunk.split("CANDIDATE #").length - 1;
+    const out = await chatJSON<{ matches?: { rank?: number; found?: boolean; quote?: string }[] }>({
+      purpose: "cv-scan",
+      maxTokens: 900,
+      user: `Search these CV texts — FULL documents, check experience sections and later pages too — and find evidence matching: "${query}".
 
 Rules: only report candidates with a clear, quotable piece of evidence. The quote must be copied from the text (max 140 chars, trimmed sensibly). Ignore candidates with no evidence. Ranks are numbers like 4.
 
-CV EXTRACTS:
-${corpus}
+CV TEXTS:
+${chunk}
 
 Respond JSON only: {"matches": [{"rank": number, "found": true, "quote": string}]}`,
-  });
-
-  const matches = (out.matches ?? [])
-    .filter((m) => m.found !== false && typeof m.rank === "number" && typeof m.quote === "string")
-    .map((m) => ({ rank: Number(m.rank), quote: String(m.quote).slice(0, 140) }))
-    .filter((m) => eligible.some((c) => c.rank === m.rank));
-  return { matches };
+    });
+    for (const m of out.matches ?? []) {
+      if (
+        m.found !== false &&
+        typeof m.rank === "number" &&
+        typeof m.quote === "string" &&
+        rankSet.has(m.rank)
+      ) {
+        matches.push({ rank: m.rank, quote: String(m.quote).slice(0, 140) });
+      }
+    }
+  }
+  const seenRank = new Set<number>();
+  const unique = matches.filter((m) => !seenRank.has(m.rank) && seenRank.add(m.rank));
+  return { matches: unique, scanned: Math.min(scanned, total), total };
 }

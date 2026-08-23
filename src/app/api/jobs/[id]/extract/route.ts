@@ -7,9 +7,10 @@ import { one } from "@/lib/utils";
 
 export const maxDuration = 60;
 
-/** Cap raw CV size sent to the model (chars) — keeps requests inside
- * free-tier token budgets while preserving all meaningful CV content. */
-const MAX_RAW_CHARS = 10_000;
+/** Cap raw CV size sent to the model (chars) — full text for ~2–3 dense
+ * pages, so nothing on page 2 is lost. 14k chars ≈ 3.5k tokens keeps the
+ * whole request under Groq's ~8k per-request free-tier ceiling. */
+const MAX_RAW_CHARS = 14_000;
 const CONCURRENCY = 2;
 
 export interface ExtractReportItem {

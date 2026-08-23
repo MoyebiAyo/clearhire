@@ -634,3 +634,13 @@ Fixes: chunks 25→12 questions with max_tokens 4200 (live-timed: 12 questions,
 4.7s, 1.9k tokens — far under the ceiling); route returns a clean JSON error
 (aiUserMessage) instead of 500 HTML; cv_scan corpus trimmed 12×2600→8×2200
 chars, maxTokens 1200 (same trap). Not a Vercel/timeout issue.
+
+## Lengthy CVs — full-text handling (user-flagged)
+"2 pages full" CVs (6–14k chars) were being cut in two places. Fixed:
+- Extract: MAX_RAW_CHARS 10k → 14k (~2–3 dense pages; still ~3.5k tokens, under
+  the per-request ceiling).
+- Copilot cv_scan: was 8 CVs × first 2200 chars (page-2 leadership evidence
+  lost). Now scans FULL stored text, packed into ≤24k-char requests (~6k
+  tokens each), up to 3 sequential rank-ordered calls; the shared backoff
+  absorbs rolling 429s. Answers state coverage honestly ("scanned the top N
+  by score of M") when the bank of CVs exceeds the token budget.
