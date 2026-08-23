@@ -614,3 +614,12 @@ and exam_setup return confirmation cards, cv_scan composes cited evidence
 answers in code from raw_text (≤12 CVs × 2600 chars). Executors:
 POST /api/applications/reject-bulk (status flip first, then throttled batch
 emails, per-candidate logging, failures retryable) and the exam setup flow.
+
+## Backup Groq key — automatic takeover
+`GROQ_FALLBACK_API_KEY` added to the provider chain (src/lib/ai.ts): same Groq
+model/prompts, second free-tier key. When the primary key's quota/rate limit
+exhausts (429s surviving all 4 backoff attempts) or its auth fails (401 →
+instant failover), the chain moves to `groq-backup` automatically — no code
+or deploy needed at failure time. Verified: backup key live-valid (JSON mode),
+and a scratch replica of the chain with a dead primary key failed over and
+answered via the backup. Rotate both keys post-hackathon (pasted in chat).
