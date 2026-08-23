@@ -47,3 +47,21 @@ Have a second browser tab on the Pipeline page.
 
 **Never do live:** database edits (the Fire reminder button replaces that),
 and never show raw provider errors (they're sanitized to human messages).
+
+## Bonus: Gmail inbox intake (if the judge wants it)
+
+> Requires: Settings → Gmail connected (Google shows an "unverified app"
+> screen — Advanced → Go to ClearHire (unsafe); that's expected, see the
+> explainer under the connect button).
+
+1. From any other email account, send a message to the connected inbox with
+   the subject `Application for <open job title>` and a CV PDF attached.
+2. Two ways to pull it in:
+   - **On the job page** (recommended): "Add CVs" card → **Pull now** —
+     ingests only emails about that job, straight into its pipeline.
+   - **Settings** → **Poll now** — global scan that routes each CV email to
+     the best-matching open job.
+3. The CV appears staged alongside uploads → Extract → Score as usual.
+   Emails that match no job are preserved under "waiting for manual
+   assignment" on Settings — nothing is ever dropped. Auto-poll runs every
+   10 minutes via the Cloudflare worker.

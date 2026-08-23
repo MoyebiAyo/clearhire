@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Inbox, Link2, RefreshCw, TriangleAlert } from "lucide-react";
+import { Inbox, Info, Link2, RefreshCw, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -127,10 +127,38 @@ export function GmailCard({
             <Button onClick={() => { window.location.href = "/api/gmail/connect"; }}>
               <Link2 aria-hidden /> Connect Gmail mailbox
             </Button>
-            <p className="text-xs text-muted-foreground">
-              We ask for read + label access only. The connection token is
-              stored encrypted and never appears in your browser.
-            </p>
+            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Info className="size-4 shrink-0 text-primary" aria-hidden />
+                About the Google security screen
+              </p>
+              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-muted-foreground">
+                <li>
+                  <span className="font-medium text-foreground">
+                    You may see &ldquo;Google hasn&rsquo;t verified this app.&rdquo;
+                  </span>{" "}
+                  That&rsquo;s expected — ClearHire is a new app, and Google&rsquo;s
+                  verification for Gmail access is still being completed ahead of
+                  AI BuildFest 2026.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">It&rsquo;s safe to continue:</span>{" "}
+                  on that screen, choose <em>Advanced</em> &rarr;{" "}
+                  <em>Go to ClearHire (unsafe)</em>. The wording only means
+                  &ldquo;not yet verified&rdquo; — not that anything is wrong.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Read-only access:</span>{" "}
+                  ClearHire reads messages to find CV attachments and manages its
+                  own labels — it can never send, edit, or delete your email.
+                </li>
+                <li>
+                  <span className="font-medium text-foreground">Your token stays encrypted:</span>{" "}
+                  the connection credential is encrypted at rest and never
+                  appears in your browser.
+                </li>
+              </ul>
+            </div>
           </div>
         )}
       </CardContent>

@@ -49,6 +49,19 @@ export default async function JobDetailPage({
     subject: t.subject as string,
   }));
 
+  // Gmail intake state for the per-job "Pull from Gmail" button.
+  const { data: gmailConn } = await supabase
+    .from("gmail_connections")
+    .select("gmail_address")
+    .maybeSingle();
+  const gmail = {
+    connected: !!gmailConn,
+    address:
+      gmailConn?.gmail_address && gmailConn.gmail_address !== "(unknown)"
+        ? (gmailConn.gmail_address as string)
+        : null,
+  };
+
   interface RawRow {
     id: string;
     status: string;
@@ -264,7 +277,12 @@ export default async function JobDetailPage({
         </CardContent>
       </Card>
 
-      <CvUploader jobId={job.id} jobStatus={job.status} />
+      <CvUploader
+        jobId={job.id}
+        jobStatus={job.status}
+        jobTitle={job.title}
+        gmail={gmail}
+      />
 
       <JobStage
         jobId={job.id}

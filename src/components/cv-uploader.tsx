@@ -1,8 +1,16 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, FileUp, TriangleAlert, UploadCloud, X } from "lucide-react";
+import {
+  CheckCircle2,
+  FileUp,
+  Inbox,
+  TriangleAlert,
+  UploadCloud,
+  X,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -21,15 +29,20 @@ function isSupported(file: File) {
 export function CvUploader({
   jobId,
   jobStatus,
+  jobTitle,
+  gmail,
 }: {
   jobId: string;
   jobStatus: "open" | "closed";
+  jobTitle: string;
+  gmail: { connected: boolean; address: string | null };
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState<File[]>([]);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [results, setResults] = useState<CvUploadResult[]>([]);
   const [emailDrafts, setEmailDrafts] = useState<Record<string, string>>({});
 
@@ -117,6 +130,49 @@ export function CvUploader({
     }
   }
 
+  /** Per-job inbox pull: scan the connected Gmail for CV emails whose
+   * subject matches this job and ingest them alongside uploads. Idempotent
+   * server-side — pulling twice never duplicates a candidate. */
+  async function pullFromGmail() {
+    setPulling(true);
+    try {
+      const res = await fetch("/api/mailbox/pull", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        toast.error(body.error ?? "Pull failed. Please try again.");
+        return;
+      }
+      const m = body as {
+        ingested: number;
+        scanned: number;
+        skipped: number;
+        errors: string[];
+      };
+      if (m.errors?.length > 0) {
+        toast.error("Gmail pull failed", { description: m.errors[0] });
+        return;
+      }
+      if (m.ingested > 0) {
+        toast.success(`${m.ingested} CV${m.ingested === 1 ? "" : "s"} pulled from Gmail`, {
+          description: "Staged with your uploads below — ready to extract.",
+        });
+        router.refresh();
+      } else {
+        toast.info("No new CV emails for this job", {
+          description: `${m.scanned} recent message${m.scanned === 1 ? "" : "s"} with attachments checked — emails already processed are skipped.`,
+        });
+      }
+    } catch {
+      toast.error("Network error — please try again.");
+    } finally {
+      setPulling(false);
+    }
+  }
+
   async function onSaveWithEmails() {
     const emails: Record<string, string> = {};
     let invalid = false;
@@ -153,11 +209,11 @@ export function CvUploader({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Upload CVs</CardTitle>
+        <CardTitle className="text-base">Add CVs</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Drop PDF or DOCX files — we extract the text, file them privately, and
-          match candidates by email. Duplicates get flagged, never silently
-          merged.
+          Drop PDF or DOCX files or pull them from your connected Gmail — we
+          extract the text, file them privately, and match candidates by
+          email. Duplicates get flagged, never silently merged.
         </p>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -220,6 +276,59 @@ export function CvUploader({
             }}
           />
         </div>
+
+        <div className="flex items-center gap-3" aria-hidden>
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs text-muted-foreground">or</span>
+          <div className="h-px flex-1 bg-border" />
+        </div>
+
+        {gmail.connected ? (
+          <div
+            className={cn(
+              "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-4 py-3",
+              closed && "opacity-50"
+            )}
+          >
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Inbox className="size-4 shrink-0 text-primary" aria-hidden />
+                Pull from Gmail
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Scans {gmail.address ?? "your connected inbox"} for CV emails
+                mentioning &ldquo;{jobTitle}&rdquo; — they join this job
+                alongside uploads, and re-pulling never duplicates anyone.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={pullFromGmail}
+              loading={pulling}
+              disabled={closed}
+            >
+              Pull now
+            </Button>
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-border px-4 py-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-2 font-medium text-foreground">
+              <Inbox className="size-4 text-primary" aria-hidden />
+              Pull CVs from Gmail
+            </span>
+            <p className="mt-1">
+              Candidates email their CVs? Connect your inbox in{" "}
+              <Link
+                href="/settings"
+                className="font-medium text-primary underline underline-offset-4"
+              >
+                Settings
+              </Link>{" "}
+              and pull them straight into this job — no forwarding, no downloads.
+            </p>
+          </div>
+        )}
 
         {files.length > 0 && (
           <ul className="space-y-2">

@@ -562,3 +562,18 @@ time-to-hire; set by every status-changing flow.
 - Direct Gmail API probe (curl + stored refresh token): profile returns `moyebiayodelesegun@gmail.com` (33k msgs), but `has:attachment newer_than:7d` = **0 messages, including self-sent**. The inbox simply had no CV email — the poller reported truthfully. No bug.
 - Fixed a real cosmetic bug found along the way: OAuth flow requests only Gmail scopes → no `id_token` → `gmail_address` stored as "(unknown)". Callback now fetches the address from Gmail's `/users/me/profile` (works under `gmail.readonly`); existing row backfilled.
 - Correct test (must be INCOMING mail): send FROM a different account (e.g. me@ayodev.tech) TO the connected Gmail, subject "Application for Senior Backend Engineer" (open job exists), test CV PDF attached → Settings → Poll now.
+
+## Per-job Gmail pull + connect explainer (post-Week 6)
+- Extracted the poll logic into `src/lib/mailbox.ts` (`pollConnection`) shared by
+  the global poll (cron / Settings) and the new POST `/api/mailbox/pull`
+  (session-auth, `{jobId}`). Scoped pulls match subject → that job only
+  (any status — explicit intent), leave all other emails untouched for the
+  global poll (never marked processed), and are idempotent via processed_emails.
+- Job page now reads the recruiter's gmail_connections row and renders a
+  "Pull from Gmail" row inside the "Add CVs" card (or a Settings nudge when
+  not connected). Pulled CVs join the same staging list as uploads.
+- Connect button now has a 4-point explainer: why Google shows "unverified",
+  Advanced → continue, read-only scope, encrypted token.
+- Verified live post-deploy: worker-secret poll returns `{connections:1,
+  scanned:0, errors:[]}` (refactor intact); `/api/mailbox/pull` returns 401
+  unauthenticated.
