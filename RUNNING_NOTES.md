@@ -438,7 +438,7 @@ a live status line — the "skeleton loaders with live progress" requirement.
   relation name — not `interview`. Also learned Resend 422s reserved
   domains like example.com — use real-looking addresses in tests.)
 
-### Cloudflare Worker (`worker/`) — isolation-first, pending `wrangler login`
+### Cloudflare Worker (`worker/`) — LIVE since 2026-08-23
 - `worker/src/index.ts`: MODE unset/log-only = logs every cron fire, touches
   nothing. MODE=live + APP_URL + SHARED_SECRET secrets = 15-min cron →
   /api/reminders/run, 10-min cron → /api/mailbox/poll, both with the
@@ -482,3 +482,12 @@ a live status line — the "skeleton loaders with live progress" requirement.
 - ⏳ Email→application within one polling cycle → blocked on Google OAuth
   client credentials (GMAIL_CLIENT_ID/SECRET)
 - ✅ Tokens encrypted at rest; OAuth scope is read+label only
+
+## Worker deployment record (2026-08-23)
+- workers.dev subdomain registered (clearhire-scheduler.workers.dev) via API.
+- Isolation deploy confirmed via `wrangler tail`: cron fired 01:10 UTC,
+  handler logged `[clearhire][isolation]`, touched nothing.
+- Secrets set (APP_URL, SHARED_SECRET, MODE=live). Live evidence from tail:
+  01:15 reminders → HTTP 200 {due:1, claimed:1, sent:1} (a real reminder
+  fired end-to-end); 01:20 mailbox → HTTP 200 {connections:0} (correct —
+  no Gmail connected yet). Crons: */15 reminders, */10 mailbox poll.
