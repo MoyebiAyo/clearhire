@@ -33,7 +33,8 @@ function authorized(request: Request): boolean {
 interface DueRow {
   id: string;
   offset_label: string;
-  interview: {
+  /** PostgREST embed key = relation name ("interviews"). */
+  interviews: {
     id: string;
     status: string;
     scheduled_time: string | null;
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
     .lte("fire_at", new Date().toISOString());
 
   const due = ((dueRows ?? []) as unknown as DueRow[]).filter(
-    (r) => r.interview?.status === "scheduled" && r.interview.scheduled_time
+    (r) => r.interviews?.status === "scheduled" && r.interviews.scheduled_time
   );
   const skippedCancelled = (dueRows ?? []).length - due.length;
   if (due.length === 0) {
@@ -69,7 +70,7 @@ export async function POST(request: Request) {
 
   // 2. Reminder template (recruiter's own if any, else the shared default).
   const firstJob = one<{ recruiters: unknown }>(
-    one<{ jobs: unknown }>(due[0].interview?.applications)?.jobs
+    one<{ jobs: unknown }>(due[0].interviews?.applications)?.jobs
   );
   const recruiterId = one<{ id: string }>(firstJob?.recruiters)?.id;
   let template: { subject: string; body: string } | null = null;
@@ -116,7 +117,7 @@ export async function POST(request: Request) {
   // 4. Compose + batch send via Resend.
   const emails = toSend.map((row) => {
     const app = one<{ id: string; candidates: unknown; jobs: unknown }>(
-      row.interview?.applications
+      row.interviews?.applications
     );
     const candidate = one<{ name: string | null; email: string }>(app?.candidates);
     const job = one<{ title: string; recruiters: unknown }>(app?.jobs);
@@ -125,10 +126,10 @@ export async function POST(request: Request) {
       candidate_name: candidate?.name?.split(" ")[0] || "there",
       recruiter_name: org ?? "the hiring team",
       job_title: job?.title ?? "your interview",
-      interview_time: row.interview!.scheduled_time
-        ? new Date(row.interview!.scheduled_time).toUTCString()
+      interview_time: row.interviews!.scheduled_time
+        ? new Date(row.interviews!.scheduled_time).toUTCString()
         : "(time to be confirmed)",
-      location_or_link: row.interview?.location_or_link ?? "details to follow",
+      location_or_link: row.interviews?.location_or_link ?? "details to follow",
     };
     return {
       applicationId: app!.id,
