@@ -59,8 +59,9 @@ export function AiPipeline({
             </div>
           </div>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
             <Button
+              className="w-full sm:w-auto"
               onClick={onExtract}
               loading={running === "extract"}
               disabled={pendingExtract === 0 || running !== null}
@@ -79,6 +80,7 @@ export function AiPipeline({
               )}
             </Button>
             <Button
+              className="w-full sm:w-auto"
               onClick={onScore}
               loading={running === "score"}
               disabled={readyToScore === 0 || running !== null}
@@ -107,7 +109,7 @@ export function AiPipeline({
           <div className="space-y-2" aria-live="polite">
             <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden />
-              <span key={busyLine} className="fade-swap font-medium text-foreground">
+              <span key={busyLine} className="fade-swap break-words font-medium text-foreground">
                 {busyLine}
               </span>
               <span className="tabular-nums">

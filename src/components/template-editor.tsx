@@ -80,15 +80,16 @@ export function TemplateEditor({
 
   return (
     <div className="space-y-6">
-      <p className="text-xs text-muted-foreground">
-        Sending from <code className="rounded bg-muted px-1">{from}</code> ·
-        Merge fields:{" "}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+        <span>Sending from</span>
+        <code className="max-w-full break-all rounded bg-muted px-1">{from}</code>
+        <span className="mr-1">· Merge fields:</span>
         {MERGE_FIELDS.map((f) => (
-          <code key={f} className="mx-0.5 rounded bg-muted px-1">
+          <code key={f} className="max-w-full break-all rounded bg-muted px-1">
             {`{{${f}}}`}
           </code>
         ))}
-      </p>
+      </div>
 
       {Object.entries(grouped).map(([type, list]) => (
         <div key={type} className="space-y-2">
@@ -124,11 +125,11 @@ export function TemplateEditor({
                         {error}
                       </p>
                     )}
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => save(t.id)} loading={busy}>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Button className="w-full sm:w-auto" size="sm" onClick={() => save(t.id)} loading={busy}>
                         Save {t.shared ? "(creates your copy)" : ""}
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(null)}>
+                      <Button className="w-full sm:w-auto" size="sm" variant="ghost" onClick={() => setEditing(null)}>
                         Cancel
                       </Button>
                     </div>

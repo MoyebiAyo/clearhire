@@ -239,7 +239,7 @@ export function CvUploader({
             if (!closed) addFiles(e.dataTransfer.files);
           }}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-10 text-center transition-colors",
+            "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-8 text-center transition-colors sm:px-6 sm:py-10",
             dragging
               ? "border-primary bg-primary-soft"
               : "border-border hover:border-primary/50 hover:bg-muted/50",
@@ -335,11 +335,11 @@ export function CvUploader({
             {files.map((file) => (
               <li
                 key={file.name}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2"
               >
                 <span className="flex min-w-0 items-center gap-2 text-sm">
                   <FileUp className="size-4 shrink-0 text-muted-foreground" aria-hidden />
-                  <span className="truncate">{file.name}</span>
+                  <span className="break-words">{file.name}</span>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {formatBytes(file.size)}
                   </span>
@@ -358,12 +358,13 @@ export function CvUploader({
         )}
 
         {files.length > 0 && (
-          <div className="flex items-center gap-3">
-            <Button onClick={onUpload} loading={uploading} disabled={closed}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Button className="w-full sm:w-auto" onClick={onUpload} loading={uploading} disabled={closed}>
               Upload {files.length} file{files.length === 1 ? "" : "s"}
             </Button>
-            <Button
-              variant="ghost"
+              <Button
+                variant="ghost"
+                className="w-full sm:w-auto"
               onClick={() => {
                 setFiles([]);
                 setResults([]);
@@ -386,18 +387,18 @@ export function CvUploader({
                   r.status === "needs_email" && "border-warning/40 bg-warning-soft/50"
                 )}
               >
-                <span className="min-w-0 flex-1 truncate font-medium">{r.filename}</span>
+                <span className="min-w-0 flex-1 break-words font-medium">{r.filename}</span>
                 {r.status === "created" && (
                   <>
                     <Badge variant="success">
                       <CheckCircle2 aria-hidden /> Added
                     </Badge>
-                    <span className="text-xs text-muted-foreground">{r.email}</span>
+                    <span className="max-w-full break-all text-xs text-muted-foreground">{r.email}</span>
                     {r.duplicate && (
-                      <Badge variant="warning">Duplicate — already applied to this job</Badge>
+                      <Badge variant="warning" className="whitespace-normal">Duplicate — already applied to this job</Badge>
                     )}
                     {r.returning && (
-                      <Badge variant="default">Returning candidate — linked</Badge>
+                      <Badge variant="default" className="whitespace-normal">Returning candidate — linked</Badge>
                     )}
                   </>
                 )}
@@ -406,7 +407,7 @@ export function CvUploader({
                     <Badge variant="destructive">
                       <TriangleAlert aria-hidden /> Failed
                     </Badge>
-                    <span className="text-xs text-muted-foreground">{r.message}</span>
+                    <span className="break-words text-xs text-muted-foreground">{r.message}</span>
                   </>
                 )}
                 {r.status === "needs_email" && (
@@ -428,7 +429,7 @@ export function CvUploader({
 
             {needsEmail.length > 0 && (
               <div className="flex flex-wrap items-center gap-3">
-                <Button onClick={onSaveWithEmails} loading={uploading}>
+                <Button className="w-full sm:w-auto" onClick={onSaveWithEmails} loading={uploading}>
                   Save {needsEmail.length} CV{needsEmail.length === 1 ? "" : "s"} with these
                   emails
                 </Button>

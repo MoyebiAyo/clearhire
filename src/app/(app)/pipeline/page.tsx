@@ -61,13 +61,13 @@ export default async function PipelinePage({
             stage menu. Moving to Rejected offers to draft the closing email.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:flex-row sm:items-center">
           {jobs && jobs.length > 0 && (
-            <form action="/pipeline" className="flex items-center gap-2">
+            <form action="/pipeline" className="flex flex-col gap-2 sm:flex-row sm:items-center">
               <select
                 name="job"
                 defaultValue={jobFilter ?? ""}
-                className="h-9 rounded-lg border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-10 w-full rounded-lg border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-9 sm:w-auto"
                 aria-label="Filter by job"
               >
                 <option value="">All jobs</option>
@@ -79,7 +79,7 @@ export default async function PipelinePage({
               </select>
               <button
                 type="submit"
-                className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-sm hover:bg-muted"
+                className="h-10 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-sm hover:bg-muted sm:h-9"
               >
                 Filter
               </button>
@@ -87,7 +87,7 @@ export default async function PipelinePage({
           )}
           <Link
             href="/analytics"
-            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+            className="text-sm font-medium text-primary underline-offset-4 hover:underline sm:whitespace-nowrap"
           >
             View analytics →
           </Link>

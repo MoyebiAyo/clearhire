@@ -258,8 +258,8 @@ export default async function JobDetailPage({
           <ArrowLeft aria-hidden /> All jobs
         </Link>
         <div className="mt-2 flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">{job.title}</h1>
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-semibold tracking-tight">{job.title}</h1>
             <p className="mt-1 flex items-center gap-2 text-sm text-muted-foreground">
               <Clock className="size-3.5" aria-hidden />
               Created {formatDate(job.created_at)}
@@ -314,7 +314,7 @@ export default async function JobDetailPage({
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-primary marker:content-none hover:bg-muted">
               Show job description
             </summary>
-            <p className="whitespace-pre-wrap border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground">
+            <p className="whitespace-pre-wrap break-words border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground">
               {job.jd_text}
             </p>
           </details>

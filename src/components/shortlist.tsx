@@ -804,18 +804,18 @@ function DetailDrawer({
       aria-label="Candidate details"
     >
       <div
-        className="h-full w-full max-w-md overflow-y-auto bg-card p-6 shadow-xl"
+        className="h-full w-full max-w-md overflow-x-hidden overflow-y-auto bg-card p-4 shadow-xl sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-start justify-between">
-          <h3 className="text-lg font-semibold">
+        <div className="flex min-w-0 items-start justify-between gap-3">
+          <h3 className="min-w-0 break-words text-lg font-semibold">
             {revealed ? row.name || row.email : `Candidate #${row.rank}`}
           </h3>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close details"
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-5" aria-hidden />
           </button>
@@ -832,7 +832,7 @@ function DetailDrawer({
         {revealed ? (
           <div className="mt-4 space-y-1 rounded-lg bg-muted p-4 text-sm">
             <p className="font-medium">{row.name ?? "Name not detected"}</p>
-            <p className="text-muted-foreground">{row.email}</p>
+            <p className="break-all text-muted-foreground">{row.email}</p>
             {row.hasCv && (
               <Button size="sm" variant="outline" className="mt-2" onClick={onDownload}>
                 <FileDown aria-hidden /> Download CV (private link)
@@ -883,8 +883,8 @@ function DetailDrawer({
                 <ul className="mt-2 space-y-2">
                   {s.gaps.map((g, i) => (
                     <li key={i} className="rounded-lg border border-border p-2.5 text-sm">
-                      <div className="flex items-start justify-between gap-2">
-                        <span>{g.requirement}</span>
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 break-words">{g.requirement}</span>
                         <Badge
                           variant={g.severity === "hard" ? "destructive" : "secondary"}
                           className="shrink-0"
@@ -920,7 +920,7 @@ function DetailDrawer({
                     ? new Date(row.interview.scheduled_time).toUTCString()
                     : "Time not confirmed yet — waiting for the candidate to pick a slot."}
                 </p>
-                <p className="text-xs text-muted-foreground">
+                <p className="break-words text-xs text-muted-foreground">
                   {row.interview.interviewer} · {row.interview.location_or_link}
                 </p>
                 {row.interview.scorecard && s && (

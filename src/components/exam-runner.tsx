@@ -506,7 +506,7 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
                 {current.difficulty}
               </Badge>
             </div>
-            <h2 className="text-lg font-semibold leading-relaxed">
+            <h2 className="break-words text-lg font-semibold leading-relaxed">
               {current.question}
             </h2>
             <div
@@ -526,7 +526,7 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
                       setAnswers((a) => ({ ...a, [current.id]: opt }))
                     }
                     className={cn(
-                      "flex items-start gap-3 rounded-xl border px-4 py-3.5 text-left text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                      "flex min-w-0 items-start gap-3 break-words rounded-xl border px-4 py-3.5 text-left text-sm leading-relaxed transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                       selected
                         ? "border-primary bg-primary-soft"
                         : "border-border bg-card hover:border-primary/50 hover:bg-muted/50"
@@ -662,7 +662,7 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
                   : " — everything is answered."}{" "}
                 You can&apos;t change anything after this.
               </p>
-              <div className="flex gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => setConfirmSubmit(false)}>
                   Keep working
                 </Button>

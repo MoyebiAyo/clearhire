@@ -265,7 +265,7 @@ function ScheduleDialog({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Label className="text-xs text-muted-foreground">Booking:</Label>
             {(["slots", "direct"] as const).map((m) => (
               <button
@@ -337,11 +337,11 @@ function ScheduleDialog({
             </p>
           )}
 
-          <div className="flex items-center gap-3">
-            <Button onClick={createInterview} loading={busy}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Button className="w-full sm:w-auto" onClick={createInterview} loading={busy}>
               Draft invite
             </Button>
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button className="w-full sm:w-auto" variant="ghost" onClick={onClose}>Cancel</Button>
           </div>
         </div>
       ) : (
@@ -368,11 +368,11 @@ function ScheduleDialog({
               {error}
             </p>
           )}
-          <div className="flex items-center gap-3">
-            <Button onClick={sendInvite} loading={stage === "sending"}>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+            <Button className="w-full sm:w-auto" onClick={sendInvite} loading={stage === "sending"}>
               Send invite
             </Button>
-            <Button variant="ghost" onClick={onClose}>Close without sending</Button>
+            <Button className="w-full sm:w-auto" variant="ghost" onClick={onClose}>Close without sending</Button>
           </div>
         </div>
       )}

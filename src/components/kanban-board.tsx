@@ -88,7 +88,7 @@ export function KanbanBoard({ initialCards }: { initialCards: KanbanCard[] }) {
 
   return (
     <div>
-      <div className="grid grid-cols-1 gap-3 overflow-x-auto md:grid-cols-3 xl:grid-cols-6">
+      <div className="flex snap-x gap-3 overflow-x-auto pb-2 md:grid md:grid-cols-3 md:overflow-visible md:pb-0 xl:grid-cols-6">
         {COLUMNS.map((col) => {
           const inCol = cards.filter(
             (c) =>
@@ -114,7 +114,7 @@ export function KanbanBoard({ initialCards }: { initialCards: KanbanCard[] }) {
                   move(card, target);
                 }
               }}
-              className={`min-w-[230px] rounded-xl border p-3 transition-colors ${
+              className={`w-[min(82vw,280px)] shrink-0 snap-start rounded-xl border p-3 transition-colors md:w-auto md:min-w-0 ${
                 hoverCol === col.key
                   ? "border-primary/60 bg-primary-soft/40"
                   : "border-border bg-muted/40"
@@ -168,7 +168,7 @@ export function KanbanBoard({ initialCards }: { initialCards: KanbanCard[] }) {
                       value={card.status}
                       disabled={busyId === card.id}
                       onChange={(e) => move(card, e.target.value)}
-                      className="mt-2 h-7 w-full rounded-md border border-input bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                       className="mt-2 h-10 w-full rounded-md border border-input bg-card px-2 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8"
                       aria-label={`Move ${card.revealed ? card.name ?? card.email : "candidate"} to stage`}
                     >
                       {ALL_STATUSES.map((s) => (

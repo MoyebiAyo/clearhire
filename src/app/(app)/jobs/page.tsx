@@ -37,14 +37,14 @@ export default async function JobsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Jobs</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             One job per role — each with its own JD and scoring rubric.
           </p>
         </div>
-        <Link href="/jobs/new" className={cn(buttonVariants())}>
+        <Link href="/jobs/new" className={cn(buttonVariants(), "w-full sm:w-auto")}>
           <Plus aria-hidden /> New job
         </Link>
       </div>
@@ -84,7 +84,7 @@ export default async function JobsPage() {
                     · Created {formatDate(job.created_at)}
                   </p>
                 </div>
-                <div className="flex shrink-0 items-center gap-3">
+                <div className="flex shrink-0 items-center gap-2 sm:gap-3">
                   <Badge variant={job.status === "open" ? "success" : "secondary"}>
                     {job.status}
                   </Badge>

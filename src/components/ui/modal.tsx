@@ -40,18 +40,18 @@ export function Modal({
     >
       <div
         className={cn(
-          "max-h-[90vh] w-full overflow-y-auto rounded-xl bg-card p-6 shadow-xl",
+          "max-h-[92vh] w-full min-w-0 overflow-x-hidden overflow-y-auto rounded-xl bg-card p-4 shadow-xl sm:p-6",
           wide ? "max-w-2xl" : "max-w-lg"
         )}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <h3 className="text-lg font-semibold">{title}</h3>
+        <div className="mb-4 flex min-w-0 items-start justify-between gap-3">
+          <h3 className="min-w-0 break-words text-lg font-semibold">{title}</h3>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close"
-            className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <X className="size-5" aria-hidden />
           </button>

@@ -128,8 +128,8 @@ export function ExamScheduler({
 
   return (
     <Card>
-      <CardHeader className="flex-row items-start justify-between gap-4 space-y-0">
-        <div>
+      <CardHeader className="flex-col items-stretch gap-3 space-y-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0">
           <CardTitle className="flex items-center gap-2 text-base">
             <GraduationCap className="size-4 text-primary" aria-hidden />
             Candidate examination
@@ -138,7 +138,7 @@ export function ExamScheduler({
             Set the exam window, choose candidates, generate role-specific questions, and send personal links.
           </p>
         </div>
-        <Button variant="outline" onClick={() => setOpen((value) => !value)}>
+        <Button className="w-full sm:w-auto" variant="outline" onClick={() => setOpen((value) => !value)}>
           <CalendarClock aria-hidden /> {open ? "Close" : "Schedule exam"}
         </Button>
       </CardHeader>
@@ -252,6 +252,7 @@ export function ExamScheduler({
               {progress ?? `${selected.length} candidate${selected.length === 1 ? "" : "s"} selected`}
             </p>
             <Button
+              className="w-full sm:w-auto"
               onClick={scheduleExam}
               loading={busy}
               disabled={busy || !aiConfigured || selected.length === 0}

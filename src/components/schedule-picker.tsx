@@ -86,10 +86,10 @@ export function SchedulePicker({
           <span className="inline-flex size-12 items-center justify-center rounded-2xl bg-primary-soft text-primary">
             <CalendarClock className="size-6" aria-hidden />
           </span>
-          <h1 className="mt-3 text-2xl font-semibold tracking-tight">
+          <h1 className="mt-3 break-words text-2xl font-semibold tracking-tight">
             {confirmed ? "You're all set!" : `Hi ${firstName} — pick a time`}
           </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 break-words text-sm text-muted-foreground">
             {confirmed
               ? "Your interview is confirmed — we've added it to your calendar."
               : `Interview for ${jobTitle} with ${company}`}
@@ -109,7 +109,7 @@ export function SchedulePicker({
                   {interviewer ?? "The team"}
                 </p>
                 {location && (
-                  <p className="flex items-center justify-center gap-1.5 text-sm text-muted-foreground">
+                  <p className="flex flex-wrap items-center justify-center gap-1.5 break-words text-sm text-muted-foreground">
                     <MapPin className="size-3.5" aria-hidden /> {location}
                   </p>
                 )}

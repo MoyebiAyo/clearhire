@@ -100,7 +100,7 @@ export function RubricEditor({
         </p>
       </CardHeader>
       <CardContent className="space-y-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-medium">Weights</span>
           <span
             className={cn(
@@ -169,11 +169,12 @@ export function RubricEditor({
           </p>
         )}
 
-        <div className="flex items-center gap-3">
-          <Button onClick={onSave} loading={loading}>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          <Button className="w-full sm:w-auto" onClick={onSave} loading={loading}>
             Save changes
           </Button>
-          <Button
+            <Button
+              className="w-full sm:w-auto"
             variant="ghost"
             onClick={() => {
               setOpen(false);

@@ -98,9 +98,9 @@ export function JobForm() {
       </Card>
 
       <Card>
-        <CardContent className="space-y-5 p-6">
-          <div className="flex items-center justify-between gap-4">
-            <div>
+          <CardContent className="space-y-5 p-4 sm:p-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
               <h2 className="font-medium">Scoring rubric</h2>
               <p className="text-xs text-muted-foreground">
                 How much each criterion matters when CVs are scored. Must total
@@ -172,11 +172,11 @@ export function JobForm() {
         </p>
       )}
 
-      <div className="flex items-center gap-3">
-        <Button type="submit" size="lg" loading={loading}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <Button className="w-full sm:w-auto" type="submit" size="lg" loading={loading}>
           Create job
         </Button>
-        <Button type="button" variant="ghost" onClick={() => router.back()}>
+        <Button className="w-full sm:w-auto" type="button" variant="ghost" onClick={() => router.back()}>
           Cancel
         </Button>
       </div>

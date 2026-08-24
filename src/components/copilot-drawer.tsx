@@ -273,7 +273,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
             </div>
 
             {/* Messages */}
-            <div ref={scrollRef} className="flex-1 space-y-4 overflow-y-auto px-5 py-4">
+            <div ref={scrollRef} className="min-w-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto px-4 py-4 sm:px-5">
               {msgs.length === 0 && (
                 <div className="space-y-3 py-6 text-center">
                   <p className="text-sm text-muted-foreground">
@@ -298,13 +298,13 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
               {msgs.map((m) =>
                 m.role === "user" ? (
                   <div key={m.id} className="flex justify-end">
-                    <p className="max-w-[85%] rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+                    <p className="max-w-[85%] break-words rounded-2xl rounded-br-sm bg-primary px-4 py-2.5 text-sm text-primary-foreground">
                       {m.content}
                     </p>
                   </div>
                 ) : (
                   <div key={m.id} className="space-y-2">
-                    <p className="whitespace-pre-wrap rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm leading-relaxed">
+                    <p className="whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm leading-relaxed">
                       {m.content}
                     </p>
                     {m.action?.name === "reject_preview" && !m.actionDone && (
@@ -342,7 +342,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
 
             {/* Input */}
             <form
-              className="flex items-center gap-2 border-t border-border px-4 py-3"
+              className="flex items-center gap-2 border-t border-border px-3 py-3 sm:px-4"
               onSubmit={(e) => {
                 e.preventDefault();
                 send(input);
@@ -353,7 +353,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask, or describe an action…"
                 aria-label="Message the copilot"
-                className="h-10 flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               />
               <Button type="submit" size="sm" loading={sending} disabled={!input.trim()}>
                 <Send aria-hidden /> Send
@@ -389,7 +389,7 @@ function RejectActionCard({
   }
   return (
     <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm font-medium">Reject {card.count} candidate{card.count === 1 ? "" : "s"}</p>
         <Badge variant="destructive">Pending your confirm</Badge>
       </div>
@@ -422,7 +422,7 @@ function RejectActionCard({
           loading={busy}
           disabled={busy}
           onClick={() => onRun(tone)}
-          className="ml-auto"
+          className="w-full sm:ml-auto sm:w-auto"
         >
           <XCircle aria-hidden /> Reject &amp; email {card.count}
         </Button>
@@ -464,12 +464,12 @@ function ExamActionCard({
 
   return (
     <div className="space-y-3 rounded-xl border border-border bg-background p-4">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-sm font-medium">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="min-w-0 flex items-center gap-1.5 text-sm font-medium">
           <GraduationCap className="size-4 text-primary" aria-hidden />
           Exam for {card.count} candidate{card.count === 1 ? "" : "s"}
         </p>
-        <Badge variant="secondary">AI proposal — edit freely</Badge>
+        <Badge variant="secondary" className="whitespace-normal">AI proposal — edit freely</Badge>
       </div>
 
       <div className="grid grid-cols-2 gap-3 text-xs">

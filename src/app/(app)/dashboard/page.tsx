@@ -81,7 +81,7 @@ export default async function DashboardPage() {
         </Card>
       ) : (
         <Card>
-          <CardHeader className="flex-row items-center justify-between space-y-0">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle>Recent jobs</CardTitle>
             <Link
               href="/jobs"
@@ -95,9 +95,9 @@ export default async function DashboardPage() {
               <Link
                 key={job.id}
                 href={`/jobs/${job.id}`}
-                className="-mx-2 flex items-center justify-between rounded-lg px-2 py-3 transition-colors hover:bg-muted"
+                className="-mx-2 flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-lg px-2 py-3 transition-colors hover:bg-muted"
               >
-                <span className="font-medium">{job.title}</span>
+                <span className="min-w-0 flex-1 break-words font-medium">{job.title}</span>
                 <span className="flex items-center gap-3 text-sm text-muted-foreground">
                   {formatDate(job.created_at)}
                   <Badge variant={job.status === "open" ? "success" : "secondary"}>
