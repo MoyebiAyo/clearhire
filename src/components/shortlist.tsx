@@ -332,12 +332,12 @@ export function Shortlist({
       ) : (
         <>
           {busy && (
-            <div className="grid gap-3 md:grid-cols-2" aria-hidden>
+            <div className="grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2" aria-hidden>
               <Skeleton className="h-40" />
               <Skeleton className="h-40" />
             </div>
           )}
-          <div className={cn("grid gap-3 md:grid-cols-2", busy && "opacity-50")}>
+          <div className={cn("grid min-w-0 grid-cols-1 gap-3 xl:grid-cols-2", busy && "opacity-50")}>
             {visible.map((row) => (
               <ShortlistCard
                 key={row.id}
@@ -560,9 +560,9 @@ function ShortlistCard({
   const final = s ? finalScore(row, examWeights) : null;
   const examChip = row.exam ? EXAM_CHIP[row.exam.status] : null;
   return (
-    <Card className={cn("transition-shadow hover:shadow-md", !s && "opacity-70")}>
+    <Card className={cn("min-w-0 overflow-hidden transition-shadow hover:shadow-md", !s && "opacity-70")}>
       <CardContent className="space-y-4 p-5">
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span
@@ -653,7 +653,7 @@ function ShortlistCard({
           </div>
           {s && (
             <div
-              className="text-right"
+              className="self-end text-right sm:ml-auto sm:shrink-0 sm:self-start"
               title={
                 blended && final !== null
                   ? `Final = CV ${Math.round(s.total)} × ${examWeights!.cv}% + Exam ${Math.round(row.exam!.score!)} × ${examWeights!.exam}% — computed in code, never by the AI.`
@@ -744,8 +744,9 @@ function ShortlistCard({
           </details>
         )}
 
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex flex-wrap items-center gap-2 pt-1">
           <Button
+            className="w-full sm:w-auto"
             size="sm"
             variant="secondary"
             onClick={onReveal}
@@ -758,11 +759,11 @@ function ShortlistCard({
           >
             <Eye aria-hidden /> {revealed ? "Revealed" : "Reveal identity"}
           </Button>
-          <Button size="sm" variant="ghost" onClick={onDetails}>
+          <Button className="flex-1 sm:flex-none" size="sm" variant="ghost" onClick={onDetails}>
             <Info aria-hidden /> Details
           </Button>
           {revealed && row.hasCv && (
-            <Button size="sm" variant="ghost" onClick={onDownload} title="Opens a private, 5-minute download link.">
+            <Button className="flex-1 sm:flex-none" size="sm" variant="ghost" onClick={onDownload} title="Opens a private, 5-minute download link.">
               <FileDown aria-hidden /> CV
             </Button>
           )}
