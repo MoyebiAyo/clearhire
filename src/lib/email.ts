@@ -120,8 +120,19 @@ export async function sendEmailBatch(
       });
       if (!res.ok) {
         const body = await res.text().catch(() => "");
-        const err = `resend-${res.status}: ${body.slice(0, 120)}`;
-        slice.forEach((_, j) => (results[i + j] = { ok: false, error: err }));
+        // Resend rejects the entire batch if any recipient is invalid (e.g. example.com).
+        // Fall back to individual sends so valid addresses still get delivered.
+        if (res.status === 422 || res.status === 400) {
+          for (let j = 0; j < slice.length; j++) {
+            const single = slice[j];
+            const r = await sendEmail(single);
+            results[i + j] = r;
+            if (j < slice.length - 1) await new Promise((rr) => setTimeout(rr, 350));
+          }
+        } else {
+          const err = `resend-${res.status}: ${body.slice(0, 120)}`;
+          slice.forEach((_, j) => (results[i + j] = { ok: false, error: err }));
+        }
       } else {
         // Resend returns { data: [{ id }, ...] } for batch sends. Accept the
         // bare array too so provider response changes fail closed per item.
