@@ -4,6 +4,7 @@ import { aiUserMessage, chatJSON } from "@/lib/ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
+import { validCopilotStage } from "@/lib/copilot-action";
 
 export const maxDuration = 60;
 
@@ -44,6 +45,7 @@ interface BlindCandidate {
   softGaps: string[];
   rationale: string | null;
   exam: { status: string; score: number | null } | null;
+  interview: { status: string; scheduled: boolean } | null;
   flaggedDuplicate: boolean;
   identity: string | null; // only when revealed_at is set
   applicationId: string;
@@ -84,7 +86,7 @@ export async function POST(
   const { data: appRows } = await supabase
     .from("applications")
     .select(
-      "id, status, revealed_at, flagged_duplicate, cv_extractions(skills, experience_years, certifications, tools), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), exam_invites(status, score), candidates(name, email)"
+      "id, status, revealed_at, flagged_duplicate, cv_extractions(skills, experience_years, certifications, tools), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), exam_invites(status, score), interviews(status, scheduled_time), candidates(name, email)"
     )
     .eq("job_id", id)
     .order("applied_at", { ascending: true });
@@ -94,6 +96,7 @@ export async function POST(
       const ext = one<Record<string, unknown>>(r.cv_extractions as unknown) ?? null;
       const sc = one<Record<string, unknown>>(r.scores as unknown) ?? null;
       const inv = one<Record<string, unknown>>(r.exam_invites as unknown) ?? null;
+      const intr = one<Record<string, unknown>>(r.interviews as unknown) ?? null;
       const cand = one<Record<string, unknown>>(r.candidates as unknown) ?? null;
       const gaps = Array.isArray(sc?.gaps) ? (sc!.gaps as { requirement: string; severity: string }[]) : [];
       const revealed = Boolean(r.revealed_at);
@@ -113,6 +116,7 @@ export async function POST(
         softGaps: gaps.filter((g) => g.severity !== "hard").map((g) => g.requirement),
         rationale: sc?.rationale ? String(sc.rationale) : null,
         exam: inv ? { status: String(inv.status), score: inv.score === null ? null : Number(inv.score) } : null,
+        interview: intr ? { status: String(intr.status), scheduled: Boolean(intr.scheduled_time) } : null,
         flaggedDuplicate: Boolean(r.flagged_duplicate),
         identity: revealed
           ? `${cand?.name ?? "Name not detected"} <${cand?.email ?? "no email"}>`
@@ -156,6 +160,7 @@ export async function POST(
         c.toolsList.length ? `tools=[${c.toolsList.slice(0, 6).join("; ")}]` : null,
         c.hardGaps.length ? `hardGaps=[${c.hardGaps.slice(0, 3).join("; ")}]` : null,
         c.exam ? `exam=${c.exam.status}${c.exam.score !== null ? `(${Math.round(c.exam.score)})` : ""}` : null,
+        c.interview ? `interview=${c.interview.status}${c.interview.scheduled ? "(scheduled)" : "(unscheduled)"}` : null,
         c.flaggedDuplicate ? "flaggedDuplicate" : null,
         c.identity ? `IDENTITY(REVEALED)=${c.identity}` : null,
       ].filter(Boolean);
@@ -188,20 +193,69 @@ RULES:
 - Unrevealed candidates are "Candidate #N". NEVER invent names, emails, or identities. Only candidates marked IDENTITY(REVEALED) may be named.
 - Be concise: a few sentences, or a short list. No filler.
 - You do NOT execute actions. To act, return an action proposal; the recruiter confirms on screen, then the system executes deterministically.
-- "Reject everyone below 60" → action reject_preview with maxTotal=60 (below means strictly less than).
-- "Set up an exam for those above 70" → action exam_setup with minTotal=70. Only fill config fields the recruiter stated; the system recommends the rest.
-- Questions about CV content you can't see (leadership, achievements…) → action cv_scan with a tight query string.
+- Prefer an actionable answer over refusing. If the recruiter asks to "resend", "again", "retry", "afresh", or "send it", always propose the relevant exam_resend/rejection/resend-style action if an eligible candidate exists in the current context.
+- "Resend", "send again", "retry the invite", "try again", "send afresh", "invite again" → treat as a resend request for the last relevant candidate group; propose the matching exam/rejection invite resend instead of answering without an action.
+- "Resend the exam invitation to Candidate #5" → action exam_resend with targetRanks=[5].
+- When the recruiter tries a resend phrasing twice, never repeat the same non-action explanation. Propose the resend action on the second attempt if eligible targets exist.
+- "Move Candidate #3 to shortlisted", "shortlist Candidate #3", "move Candidate #7 to offer", or a single ambiguous "Next" handling request → action stage_update with targetRanks=[N], status accordingly.
+- "Reveal Candidate #2", "show Candidate #2" → action reveal with targetRanks=[2].
+- Accept plain-English intent such as "top candidate", "top 3", "the front-runner", "the strongest", and map them to the current rank-ordered shortlist.
+- "Who has an exam invitation?" or "Who is waiting for an interview?" → answer from the data, with no action.
+- "What should I do next?" → give a prioritized recommendation from status, score, gaps, interview, exam, and duplicate data.
+- You can answer analytical questions about rankings, score breakdowns, hard gaps, skills, experience, certifications, tools, duplicate flags, pipeline status, interview status, and exam status directly from the context.
+- If the recruiter asks "what can you do?" → summarize the supported action catalog in 3-6 short bullets without inventing new capabilities.
+- If the request is interview scheduling, reminders, or email resends you cannot directly execute, explain the manual card/dialog that does it (for example: open the candidate card → Schedule interview → pick slots → Send).
+- Safe action catalog: reject with email, create an exam, resend an existing exam invitation, move candidates between pipeline stages, reveal identity, and scan CV evidence.
 
-ACTIONS (choose at most one, or null):
+Actions (choose at most one, or null):
 {"name":"reject_preview","args":{"maxTotal":number?,"minTotal":number?,"onlyHardGaps":boolean?,"tone":"formal"|"casual"|"technical"}}
 {"name":"exam_setup","args":{"minTotal":number?,"questionsPerCandidate":number?,"minutes":number?,"weightCv":number?,"bankSize":number?,"deadlineHours":number?,"tone":"formal"|"casual"|"technical"}}
 {"name":"cv_scan","args":{"query":string}}
+{"name":"exam_resend","args":{"targetRanks":number[],"tone":"formal"|"casual"|"technical"}}
+{"name":"stage_update","args":{"targetRanks":number[],"status":"applied"|"screened"|"shortlisted"|"interview_scheduled"|"interviewed"|"offer"|"rejected"}}
+{"name":"reveal","args":{"targetRanks":number[]}}
 
 Respond with JSON only: {"answer": string (what you say to the recruiter; if proposing an action, briefly say what you found and that a confirmation card follows), "action": <action object or null>}`,
   });
 
-  const answer = (out.answer ?? "").trim() || "I couldn't quite parse that — could you rephrase?";
-  const action = out.action ?? null;
+  let answer = (out.answer ?? "").trim() || "I couldn't quite parse that — could you rephrase?";
+  let action = out.action ?? null;
+
+  // Robust fallback: if the model did not propose an action but the recruiter
+  // clearly asked to resend/retry an invite, infer the intended target from
+  // rank mentions, name fragments, or the most recent rank in conversation.
+  const lastUser = messages[messages.length - 1]?.content.toLowerCase() ?? "";
+  const wantsResend = /\b(resend|send again|retry|afresh|again|re-send)\b/.test(lastUser);
+  const mentionsExam = /\bexam\b/.test(lastUser) || /\binvit/.test(lastUser);
+  if (!action && wantsResend && mentionsExam) {
+    const rankHits = [...lastUser.matchAll(/#\s*(\d+)/g)].map((m) => Number(m[1]));
+    let inferredRanks: number[] = rankHits.length
+      ? rankHits
+      : (() => {
+          const prevRanks = [...conversation.matchAll(/#\s*(\d+)/g)].map((m) => Number(m[1]));
+          return prevRanks.length ? [prevRanks[prevRanks.length - 1]] : [];
+        })();
+    // Name fragment fallback: “to moyebi” → match revealed identity or raw rank context
+    if (inferredRanks.length === 0) {
+      const nameHit = lastUser.match(/to\s+([a-z]{3,})/);
+      if (nameHit) {
+        const frag = nameHit[1].toLowerCase();
+        const byName = candidates.filter(
+          (c) => c.identity?.toLowerCase().includes(frag) || String(c.rank) === frag
+        );
+        if (byName.length === 1) inferredRanks = [byName[0].rank];
+      }
+    }
+    if (inferredRanks.length === 0 && candidates.some((c) => c.exam?.status === "invited")) {
+      // Last resort: the most recent invited candidate by rank
+      const invited = candidates.filter((c) => c.exam?.status === "invited" || c.exam?.status === "in_progress");
+      if (invited.length === 1) inferredRanks = [invited[0].rank];
+    }
+    if (inferredRanks.length > 0) {
+      action = { name: "exam_resend", args: { targetRanks: inferredRanks } } as any;
+      answer = `Got it — I will resend the exam invitation for Candidate #${inferredRanks.join(", #")} — confirm on the card below and I will deliver it.`;
+    }
+  }
 
   // Resolve proposals deterministically in code.
   let resolved: unknown = null;
@@ -270,6 +324,57 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
             : `No candidate's CV mentions "${query}" in the scanned text${coverage}.`,
         action: null,
       });
+    }
+  } else if (action && (action.name === "exam_resend" || action.name === "stage_update" || action.name === "reveal")) {
+    const args = action.args ?? {};
+    const ranks = Array.isArray(args.targetRanks)
+      ? args.targetRanks.filter((rank): rank is number => typeof rank === "number" && Number.isInteger(rank))
+      : [];
+    const selected = candidates.filter((candidate) => ranks.includes(candidate.rank));
+    if (action.name === "exam_resend") {
+      const eligible = selected.filter((candidate) => candidate.exam?.status === "invited" || candidate.exam?.status === "in_progress");
+      if (eligible.length === 0) {
+        const hint =
+          selected.length === 0
+            ? "I couldn't match that candidate — try “Candidate #N” or the exact rank you see on the shortlist."
+            : `Candidate #${selected.map((c) => c.rank).join(", #")} has no resendable exam invitation (look for status invited or in progress). Submitted, forfeited, or expired invites need a new exam.`;
+        answer = hint;
+        resolved = null;
+      } else {
+        resolved = {
+          name: "exam_resend",
+          count: eligible.length,
+          candidates: eligible.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank, identity: candidate.identity })),
+          tone: args.tone === "casual" || args.tone === "technical" ? args.tone : "formal",
+        };
+      }
+    } else if (action.name === "stage_update") {
+      if (selected.length === 0) {
+        answer = "I couldn't match that candidate — use “Candidate #N” as shown on the shortlist, for example “Move Candidate #2 to shortlisted”.";
+        resolved = null;
+      } else {
+        resolved = {
+          name: "stage_update",
+          status: validCopilotStage(args.status) ?? "shortlisted",
+          count: selected.length,
+          candidates: selected.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank, identity: candidate.identity })),
+        };
+      }
+    } else {
+      const revealable = selected.filter((candidate) => !candidate.identity);
+      if (revealable.length === 0 && selected.length > 0) {
+        answer = `Candidate #${selected.map((c) => c.rank).join(", #")} is already revealed.`;
+        resolved = null;
+      } else if (selected.length === 0) {
+        answer = "I couldn't match that candidate — try “Reveal Candidate #N”.";
+        resolved = null;
+      } else {
+        resolved = {
+          name: "reveal",
+          count: revealable.length,
+          candidates: revealable.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank })),
+        };
+      }
     }
   }
 

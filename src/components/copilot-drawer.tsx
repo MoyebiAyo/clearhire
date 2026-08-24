@@ -10,6 +10,7 @@ import {
   Sparkles,
   X,
   XCircle,
+  ArrowRight,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -53,7 +54,15 @@ interface ExamCard {
   };
 }
 
-type ActionCard = RejectCard | ExamCard;
+interface OperationalCard {
+  name: "exam_resend" | "stage_update" | "reveal";
+  count: number;
+  candidates: { applicationId: string; rank: number; identity?: string | null }[];
+  tone?: string;
+  status?: string;
+}
+
+type ActionCard = RejectCard | ExamCard | OperationalCard;
 
 interface ChatMsg {
   id: string;
@@ -66,8 +75,10 @@ interface ChatMsg {
 const SUGGESTIONS = [
   "Who's below 60?",
   "Who held leadership roles?",
-  "Summarise the top 3 candidates",
-  "Set up an exam for everyone above 70",
+  "What should I do next?",
+  "Resend this exam invite",
+  "Move Candidate #2 to shortlisted",
+  "Reveal Candidate #1",
 ];
 
 const TONES = ["formal", "casual", "technical"];
@@ -80,6 +91,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
   const [sending, setSending] = useState(false);
   const [examProgress, setExamProgress] = useState<string | null>(null);
   const [rejectBusy, setRejectBusy] = useState<string | null>(null); // msg id
+  const [actionBusy, setActionBusy] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -233,6 +245,42 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
     }
   }
 
+  async function runOperational(msg: ChatMsg, card: OperationalCard) {
+    setActionBusy(msg.id);
+    try {
+      let path = `/api/jobs/${jobId}/exams/resend`;
+      let body: Record<string, unknown> = { applicationIds: card.candidates.map((candidate) => candidate.applicationId), tone: card.tone };
+      if (card.name === "stage_update") {
+        const responses = await Promise.all(card.candidates.map((candidate) =>
+          fetch(`/api/applications/${candidate.applicationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: card.status }),
+          })
+        ));
+        if (responses.some((response) => !response.ok)) throw new Error("One or more candidates could not be moved.");
+        setMsgs((items) => items.map((item) => item.id === msg.id ? { ...item, actionDone: `Moved ${card.count} candidate${card.count === 1 ? "" : "s"} to ${card.status}.` } : item));
+        router.refresh();
+        return;
+      } else if (card.name === "reveal") {
+        await Promise.all(card.candidates.map((candidate) => fetch(`/api/applications/${candidate.applicationId}/reveal`, { method: "POST" })));
+        setMsgs((items) => items.map((item) => item.id === msg.id ? { ...item, actionDone: `Revealed ${card.count} candidate${card.count === 1 ? "" : "s"}.` } : item));
+        router.refresh();
+        return;
+      }
+      const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error ?? "The action could not be completed.");
+      const done = `Resent ${result.emailed ?? 0} exam invitation${result.emailed === 1 ? "" : "s"}${(result.failed?.length ?? 0) > 0 ? `; ${result.failed.length} failed` : ""}.`;
+      setMsgs((items) => items.map((item) => item.id === msg.id ? { ...item, actionDone: done } : item));
+      router.refresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The action could not be completed.");
+    } finally {
+      setActionBusy(null);
+    }
+  }
+
   return (
     <>
       <Button variant="outline" onClick={() => setOpen(true)}>
@@ -322,6 +370,9 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
                         onRun={(cfg) => runExam(m, m.action as ExamCard, cfg)}
                       />
                     )}
+                    {(m.action?.name === "exam_resend" || m.action?.name === "stage_update" || m.action?.name === "reveal") && !m.actionDone && (
+                      <OperationalActionCard card={m.action as OperationalCard} busy={actionBusy === m.id} onRun={() => runOperational(m, m.action as OperationalCard)} />
+                    )}
                     {m.actionDone && (
                       <p className="flex items-start gap-2 rounded-lg border border-success/30 bg-success-soft/50 px-3 py-2 text-xs leading-relaxed">
                         <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-success" aria-hidden />
@@ -363,6 +414,20 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
         </div>
       )}
     </>
+  );
+}
+
+function OperationalActionCard({ card, busy, onRun }: { card: OperationalCard; busy: boolean; onRun: () => void }) {
+  const label = card.name === "exam_resend" ? "Resend exam invitation" : card.name === "stage_update" ? `Move to ${card.status}` : "Reveal identity";
+  return (
+    <div className="space-y-3 rounded-xl border border-primary/20 bg-primary-soft/30 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-sm font-medium"><ArrowRight className="size-4 text-primary" aria-hidden /> {label}</p>
+        <Badge variant="secondary">Pending your confirm</Badge>
+      </div>
+      <p className="text-xs text-muted-foreground">{card.count} candidate{card.count === 1 ? "" : "s"} selected from the ranked shortlist. The action will use the existing server-side authorization checks.</p>
+      <Button className="w-full" loading={busy} disabled={busy || card.count === 0} onClick={onRun}><ShieldCheck aria-hidden /> Confirm {label.toLowerCase()}</Button>
+    </div>
   );
 }
 
