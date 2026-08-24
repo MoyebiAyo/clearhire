@@ -121,46 +121,69 @@ export function GmailCard({
                 </ul>
               </div>
             )}
+            <VerificationNote />
           </>
         ) : (
           <div className="space-y-3">
             <Button onClick={() => { window.location.href = "/api/gmail/connect"; }}>
               <Link2 aria-hidden /> Connect Gmail mailbox
             </Button>
-            <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <Info className="size-4 shrink-0 text-primary" aria-hidden />
-                About the Google security screen
-              </p>
-              <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-muted-foreground">
-                <li>
-                  <span className="font-medium text-foreground">
-                    You may see &ldquo;Google hasn&rsquo;t verified this app.&rdquo;
-                  </span>{" "}
-                  That&rsquo;s expected — ClearHire is a new app, and Google&rsquo;s
-                  verification for Gmail access is still being completed ahead of
-                  AI BuildFest 2026.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">It&rsquo;s safe to continue:</span>{" "}
-                  on that screen, choose <em>Advanced</em> &rarr;{" "}
-                  <em>Go to ClearHire (unsafe)</em>. The wording only means
-                  &ldquo;not yet verified&rdquo; — not that anything is wrong.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Read-only access:</span>{" "}
-                  ClearHire reads messages to find CV attachments and manages its
-                  own labels — it can never send, edit, or delete your email.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Your token stays encrypted:</span>{" "}
-                  the connection credential is encrypted at rest and never
-                  appears in your browser.
-                </li>
-              </ul>
-            </div>
+            <VerificationNote />
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Always-visible testing notice: Google's verification for this build is
+ * still in progress (AI BuildFest 2026), so consent screens warn and some
+ * inboxes spam-filter our sends — neither means anything is wrong.
+ */
+function VerificationNote() {
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+      <p className="flex items-center gap-2 text-sm font-medium">
+        <Info className="size-4 shrink-0 text-primary" aria-hidden />
+        You may see security warnings — here&rsquo;s why
+      </p>
+      <ul className="mt-2 list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-muted-foreground">
+        <li>
+          <span className="font-medium text-foreground">
+            Google may say &ldquo;this app isn&rsquo;t verified.&rdquo;
+          </span>{" "}
+          That&rsquo;s expected — this integration is still in testing, and
+          Google&rsquo;s domain verification for Gmail access is being completed
+          as part of the AI BuildFest 2026 setup. The warning can be ignored.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">To continue:</span> on that
+          screen choose <em>Advanced</em> &rarr; <em>Go to ClearHire (unsafe)</em>.
+          The wording only means &ldquo;not yet verified&rdquo; — not that
+          anything is wrong.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Candidate emails:</span>{" "}
+          invites and reminders are sent from our verified sender
+          (<code className="rounded bg-muted px-1">clearhire@mousetech.app</code>),
+          but while the product is in testing some inboxes may file them under
+          spam — check there and mark &ldquo;not spam&rdquo; if one goes missing.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Read-only access:</span>{" "}
+          ClearHire reads messages to find CV attachments and manages its own
+          labels — it can never send, edit, or delete your email.
+        </li>
+        <li>
+          <span className="font-medium text-foreground">Your token stays encrypted:</span>{" "}
+          the connection credential is encrypted at rest and never appears in
+          your browser.
+        </li>
+      </ul>
+    </div>
+  );
+}
       </CardContent>
     </Card>
   );
