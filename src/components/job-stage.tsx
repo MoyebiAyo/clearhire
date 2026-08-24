@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -24,11 +24,47 @@ const CHUNK_SIZE = 3;
  * check below; this is a final backstop). */
 const MAX_CHUNKS = 60;
 
+/** Rotating status copy while the AI works — warm, a little playful, and
+ * true to the product (blindness, rubric, no AI math). Rendered inside the
+ * pipeline card on EVERY run, including the very first one. */
+const EXTRACT_LINES = [
+  "Thinking…",
+  "This might take a minute — we're doing the heavy lifting…",
+  "Extracting documents now…",
+  "Understanding each candidate…",
+  "Pulling out skills, tools and experience…",
+  "Fun fact: the AI never sees names — just merit.",
+  "Go on, grab a coffee — we've got this…",
+  "Almost done…",
+];
+
+const SCORE_LINES = [
+  "Scoring blind — no names, no bias…",
+  "Weighing each profile against your rubric…",
+  "Checking every requirement, one by one…",
+  "The AI loves this part…",
+  "Ranking your shortlist…",
+  "Almost there…",
+];
+
+function useRotatingLine(lines: string[], active: boolean): string {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setI(0);
+      return;
+    }
+    const t = setInterval(() => setI((v) => (v + 1) % lines.length), 2800);
+    return () => clearInterval(t);
+  }, [active, lines]);
+  return lines[i];
+}
+
 /**
  * Owns the run state shared by the pipeline controls and the shortlist.
  * AI passes run in small chunks (3 CVs per request) that each finish well
  * inside serverless limits; the client loops until `remaining` hits zero,
- * tracking progress so the shortlist can show live status.
+ * tracking progress so the pipeline card can show a live status line.
  */
 export function JobStage({
   jobId,
@@ -49,6 +85,11 @@ export function JobStage({
   const pendingExtract = rows.filter((r) => !r.extracted).length;
   const readyToScore = rows.filter((r) => r.extracted && !r.score).length;
   const scoredCount = rows.filter((r) => r.score).length;
+
+  const busyLine = useRotatingLine(
+    running?.kind === "score" ? SCORE_LINES : EXTRACT_LINES,
+    running !== null
+  );
 
   async function run(kind: "extract" | "score") {
     const initialTotal = kind === "extract" ? pendingExtract : readyToScore;
@@ -125,6 +166,8 @@ export function JobStage({
         scoredCount={scoredCount}
         aiConfigured={aiConfigured}
         running={running?.kind ?? null}
+        busy={running}
+        busyLine={busyLine}
         onExtract={() => run("extract")}
         onScore={() => run("score")}
       />

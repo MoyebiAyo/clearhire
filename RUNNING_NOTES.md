@@ -644,3 +644,14 @@ chars, maxTokens 1200 (same trap). Not a Vercel/timeout issue.
   tokens each), up to 3 sequential rank-ordered calls; the shared backoff
   absorbs rolling 429s. Answers state coverage honestly ("scanned the top N
   by score of M") when the bank of CVs exceeds the token budget.
+
+## Rotating status lines — first-run fix + timing expectation (user-flagged)
+The Week 2 rotating copy ("grab a coffee…", "scoring blind…") only rendered
+when the shortlist already had scored candidates — invisible on the very
+first Extract/Score run (exactly the demo path). Moved the rotating line +
+progress bar INTO the AI pipeline card under the buttons (where the click
+happened), shown on every run, with a caption: "This can take up to 3
+minutes depending on how many documents you uploaded — everything is saved
+as it goes, so it's safe to wait." The shortlist now shows skeletons while
+busy regardless of scoredCount; static empty cards step aside during a run.
+Lines rotate every 2.8s with the fade-swap animation.

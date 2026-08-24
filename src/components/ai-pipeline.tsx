@@ -16,6 +16,8 @@ export function AiPipeline({
   scoredCount,
   aiConfigured,
   running,
+  busy,
+  busyLine,
   onExtract,
   onScore,
 }: {
@@ -24,6 +26,8 @@ export function AiPipeline({
   scoredCount: number;
   aiConfigured: boolean;
   running: "extract" | "score" | null;
+  busy: { done: number; total: number } | null;
+  busyLine: string;
   onExtract: () => void;
   onScore: () => void;
 }) {
@@ -97,6 +101,31 @@ export function AiPipeline({
                 {scoredCount} scored — results below, ranked.
               </span>
             )}
+          </div>
+        )}
+        {busy && (
+          <div className="space-y-2" aria-live="polite">
+            <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+              <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden />
+              <span key={busyLine} className="fade-swap font-medium text-foreground">
+                {busyLine}
+              </span>
+              <span className="tabular-nums">
+                {busy.done} of {busy.total} done
+              </span>
+            </p>
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-500"
+                style={{
+                  width: `${busy.total > 0 ? Math.min((busy.done / busy.total) * 100, 100) : 0}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This can take up to 3 minutes depending on how many documents you
+              uploaded — everything is saved as it goes, so it&apos;s safe to wait.
+            </p>
           </div>
         )}
         <p className="text-xs text-muted-foreground">

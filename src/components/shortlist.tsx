@@ -83,40 +83,6 @@ export interface RubricWeights {
 
 type SortKey = "total" | "skills" | "experience" | "certifications" | "tools";
 
-/** Rotating status copy while the AI works — warm, a little playful,
- * and true to the product (blindness, rubric, no AI math). */
-const EXTRACT_LINES = [
-  "Warming up the reading lamp…",
-  "Extracting documents now…",
-  "Understanding each candidate…",
-  "Pulling out skills, tools and experience…",
-  "Fun fact: the AI never sees names — just merit.",
-  "Go on, grab a coffee — we've got this…",
-  "Almost done…",
-];
-
-const SCORE_LINES = [
-  "Scoring blind — no names, no bias…",
-  "Weighing each profile against your rubric…",
-  "Checking every requirement, one by one…",
-  "The AI loves this part…",
-  "Ranking your shortlist…",
-  "Almost there…",
-];
-
-function useRotatingLine(lines: string[], active: boolean): string {
-  const [i, setI] = useState(0);
-  useEffect(() => {
-    if (!active) {
-      setI(0);
-      return;
-    }
-    const t = setInterval(() => setI((v) => (v + 1) % lines.length), 2800);
-    return () => clearInterval(t);
-  }, [active, lines]);
-  return lines[i];
-}
-
 const CRITERIA: { key: Exclude<SortKey, "total">; label: string; weightKey: keyof RubricWeights }[] = [
   { key: "skills", label: "Skills", weightKey: "skills" },
   { key: "experience", label: "Experience", weightKey: "experience" },
@@ -171,11 +137,6 @@ export function Shortlist({
   const [showRejected, setShowRejected] = useState(false);
   const [undoingId, setUndoingId] = useState<string | null>(null);
   const router = useRouter();
-
-  const busyLine = useRotatingLine(
-    busy?.kind === "score" ? SCORE_LINES : EXTRACT_LINES,
-    busy !== null
-  );
 
   /** Database reveal state AND the screen-sharing "hide identities" layer. */
   const isRevealed = (r: ShortlistRow) =>
@@ -325,7 +286,7 @@ export function Shortlist({
         </div>
       </div>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && !busy ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="text-3xl" aria-hidden>🗂️</span>
@@ -338,7 +299,7 @@ export function Shortlist({
             </div>
           </CardContent>
         </Card>
-      ) : activeRows.length === 0 ? (
+      ) : activeRows.length === 0 && !busy ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="text-3xl" aria-hidden>🗂️</span>
@@ -354,7 +315,7 @@ export function Shortlist({
             </div>
           </CardContent>
         </Card>
-      ) : scoredCount === 0 ? (
+      ) : scoredCount === 0 && !busy ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
             <span className="text-3xl" aria-hidden>⚖️</span>
@@ -371,26 +332,9 @@ export function Shortlist({
       ) : (
         <>
           {busy && (
-            <div className="space-y-3" aria-live="polite">
-              <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                <span className="size-2 animate-pulse rounded-full bg-primary" aria-hidden />
-                <span key={busyLine} className="fade-swap font-medium text-foreground">
-                  {busyLine}
-                </span>
-                <span className="tabular-nums">
-                  {busy.done} of {busy.total} done
-                </span>
-              </p>
-              <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                <div
-                  className="h-full rounded-full bg-primary transition-all duration-500"
-                  style={{ width: `${busy.total > 0 ? Math.min((busy.done / busy.total) * 100, 100) : 0}%` }}
-                />
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <Skeleton className="h-40" />
-                <Skeleton className="h-40" />
-              </div>
+            <div className="grid gap-3 md:grid-cols-2" aria-hidden>
+              <Skeleton className="h-40" />
+              <Skeleton className="h-40" />
             </div>
           )}
           <div className={cn("grid gap-3 md:grid-cols-2", busy && "opacity-50")}>
