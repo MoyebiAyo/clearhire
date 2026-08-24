@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Clock, Scale } from "lucide-react";
 
 import { CvUploader } from "@/components/cv-uploader";
+import { ExamScheduler } from "@/components/exam-scheduler";
 import { CopilotDrawer } from "@/components/copilot-drawer";
 import { JobActions } from "@/components/job-actions";
 import { JobStage } from "@/components/job-stage";
@@ -325,6 +326,19 @@ export default async function JobDetailPage({
         jobStatus={job.status}
         jobTitle={job.title}
         gmail={gmail}
+      />
+
+      <ExamScheduler
+        jobId={job.id}
+        aiConfigured={aiConfigured()}
+        candidates={rows.map((row) => ({
+          id: row.id,
+          label: row.revealed
+            ? row.name || row.email
+            : `Candidate #${row.rank}`,
+          score: row.score?.total ?? null,
+          status: row.status,
+        }))}
       />
 
       <JobStage

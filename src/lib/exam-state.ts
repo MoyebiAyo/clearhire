@@ -1,6 +1,7 @@
 import "server-only";
 
 import { drawForCandidate, SUBMIT_GRACE_SECONDS } from "@/lib/exam";
+import { examAttemptEndsAt, examWindowState } from "@/lib/exam-window";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -27,6 +28,8 @@ export interface ResolvedInvite {
     questions_per_candidate: number;
     duration_minutes: number;
     start_deadline_hours: number;
+    available_from: string | null;
+    available_until: string | null;
     weight_cv: number;
     weight_exam: number;
   };
@@ -39,7 +42,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
   const { data } = await admin
     .from("exam_invites")
     .select(
-      "id, token, status, started_at, submitted_at, score, violations, created_at, application_id, exams(id, status, questions_per_candidate, duration_minutes, start_deadline_hours, weight_cv, weight_exam, jobs(title))"
+      "id, token, status, started_at, submitted_at, score, violations, created_at, application_id, exams(id, status, questions_per_candidate, duration_minutes, start_deadline_hours, available_from, available_until, weight_cv, weight_exam, jobs(title))"
     )
     .eq("token", token)
     .maybeSingle();
@@ -67,6 +70,8 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
       questions_per_candidate: Number(examRow.questions_per_candidate),
       duration_minutes: Number(examRow.duration_minutes),
       start_deadline_hours: Number(examRow.start_deadline_hours),
+      available_from: examRow.available_from,
+      available_until: examRow.available_until,
       weight_cv: Number(examRow.weight_cv),
       weight_exam: Number(examRow.weight_exam),
     },
@@ -86,7 +91,9 @@ export async function sweepTimedOut(resolved: ResolvedInvite): Promise<string> {
   const { invite, exam } = resolved;
 
   if (invite.status === "invited") {
-    const deadline = new Date(invite.created_at).getTime() + exam.start_deadline_hours * 3600_000;
+    const deadline = exam.available_until
+      ? new Date(exam.available_until).getTime()
+      : new Date(invite.created_at).getTime() + exam.start_deadline_hours * 3600_000;
     if (now > deadline) {
       await admin.from("exam_invites").update({ status: "expired" }).eq("id", invite.id);
       return "expired";
@@ -95,9 +102,11 @@ export async function sweepTimedOut(resolved: ResolvedInvite): Promise<string> {
   }
 
   if (invite.status === "in_progress" && invite.started_at) {
-    const endTime =
-      new Date(invite.started_at).getTime() +
-      (exam.duration_minutes * 60 + SUBMIT_GRACE_SECONDS) * 1000;
+    const endTime = examAttemptEndsAt(
+      invite.started_at,
+      exam.duration_minutes,
+      exam.available_until
+    ) + SUBMIT_GRACE_SECONDS * 1000;
     if (now > endTime) {
       await admin.from("exam_invites").update({ status: "forfeited" }).eq("id", invite.id);
       return "forfeited";
@@ -106,6 +115,24 @@ export async function sweepTimedOut(resolved: ResolvedInvite): Promise<string> {
   }
 
   return invite.status;
+}
+
+export function examAvailability(resolved: ResolvedInvite): {
+  state: "scheduled" | "open" | "closed";
+  availableFrom: string;
+  availableUntil: string;
+} {
+  const from = resolved.exam.available_from ?? resolved.invite.created_at;
+  const until = resolved.exam.available_until ?? new Date(
+    new Date(resolved.invite.created_at).getTime() +
+      resolved.exam.start_deadline_hours * 3600_000
+  ).toISOString();
+  const now = Date.now();
+  return {
+    state: examWindowState(from, until, now),
+    availableFrom: from,
+    availableUntil: until,
+  };
 }
 
 /**

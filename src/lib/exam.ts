@@ -66,6 +66,8 @@ export interface ExamConfig {
   startDeadlineHours: number;
   weightCv: number;
   weightExam: number;
+  availableFrom: string;
+  availableUntil: string;
 }
 
 export function validateExamConfig(raw: {
@@ -74,12 +76,16 @@ export function validateExamConfig(raw: {
   weightCv?: number;
   bankSize?: number;
   deadlineHours?: number;
+  availableFrom?: string;
+  availableUntil?: string;
 }): { config?: ExamConfig & { bankSize: number }; error?: string } {
   const qpc = Math.round(raw.questionsPerCandidate ?? 20);
   const minutes = Math.round(raw.minutes ?? 30);
   const weightCv = Math.round(raw.weightCv ?? 70);
   const bankSize = Math.round(raw.bankSize ?? 40);
   const deadlineHours = Math.round(raw.deadlineHours ?? 48);
+  const availableFrom = raw.availableFrom ?? new Date().toISOString();
+  const availableUntil = raw.availableUntil ?? new Date(Date.now() + deadlineHours * 3600_000).toISOString();
   const weightExam = 100 - weightCv;
 
   if (qpc < 5 || qpc > 50) return { error: "Questions per candidate must be 5–50." };
@@ -88,6 +94,12 @@ export function validateExamConfig(raw: {
   if (qpc > bankSize) return { error: "Questions per candidate can't exceed the bank size." };
   if (weightCv < 0 || weightCv > 100) return { error: "CV weight must be 0–100." };
   if (deadlineHours < 1 || deadlineHours > 720) return { error: "Start window must be 1–720 hours." };
+  const from = new Date(availableFrom);
+  const until = new Date(availableUntil);
+  if (!Number.isFinite(from.getTime()) || !Number.isFinite(until.getTime())) {
+    return { error: "Enter valid exam availability dates." };
+  }
+  if (until <= from) return { error: "Exam end date must be after the start date." };
 
   return {
     config: {
@@ -97,6 +109,8 @@ export function validateExamConfig(raw: {
       weightCv,
       weightExam,
       bankSize,
+      availableFrom: from.toISOString(),
+      availableUntil: until.toISOString(),
     },
   };
 }

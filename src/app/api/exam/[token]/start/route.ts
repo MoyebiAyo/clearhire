@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resolveInvite, sweepTimedOut } from "@/lib/exam-state";
+import { examAvailability, resolveInvite, sweepTimedOut } from "@/lib/exam-state";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -18,6 +18,13 @@ export async function POST(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const swept = await sweepTimedOut(resolved);
+  const availability = examAvailability(resolved);
+  if (swept === "invited" && availability.state === "scheduled") {
+    return NextResponse.json(
+      { status: "scheduled", availableFrom: availability.availableFrom },
+      { status: 409 }
+    );
+  }
   if (swept !== "invited" && swept !== "in_progress") {
     return NextResponse.json({ status: swept }, { status: 409 });
   }

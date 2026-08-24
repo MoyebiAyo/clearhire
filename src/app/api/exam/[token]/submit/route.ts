@@ -65,9 +65,13 @@ export async function POST(
 
   const overtime =
     invite.started_at !== null &&
-    Date.now() >
+    Date.now() > Math.min(
       new Date(invite.started_at).getTime() +
-        (resolved.exam.duration_minutes * 60 + SUBMIT_GRACE_SECONDS) * 1000;
+        (resolved.exam.duration_minutes * 60 + SUBMIT_GRACE_SECONDS) * 1000,
+      resolved.exam.available_until
+        ? new Date(resolved.exam.available_until).getTime() + SUBMIT_GRACE_SECONDS * 1000
+        : Number.POSITIVE_INFINITY
+    );
   const finalStatus = body.forfeit || overtime ? "forfeited" : "submitted";
 
   const graded = await gradeAttempt(resolved, answers);

@@ -43,6 +43,8 @@ export async function POST(
     minTotal?: number;
     tone?: string;
     sendEmails?: boolean;
+    availableFrom?: string;
+    availableUntil?: string;
   } = {};
   try {
     body = await request.json();
@@ -57,7 +59,7 @@ export async function POST(
   const { data: exam } = await supabase
     .from("exams")
     .select(
-      "id, status, bank_size, questions_per_candidate, duration_minutes, start_deadline_hours"
+      "id, status, bank_size, questions_per_candidate, duration_minutes, start_deadline_hours, available_from, available_until"
     )
     .eq("id", examId)
     .eq("job_id", id)
@@ -138,9 +140,16 @@ export async function POST(
     .maybeSingle();
   const signature = recruiter?.org_name || "the hiring team";
 
-  const deadline = new Date(
+  const availableFrom = exam.available_from ?? new Date().toISOString();
+  const availableUntil = exam.available_until ?? new Date(
     Date.now() + exam.start_deadline_hours * 3600_000
-  ).toUTCString();
+  ).toISOString();
+  const windowStart = new Date(availableFrom);
+  const windowEnd = new Date(availableUntil);
+  if (!Number.isFinite(windowStart.getTime()) || !Number.isFinite(windowEnd.getTime()) || windowEnd <= windowStart) {
+    return NextResponse.json({ error: "The exam availability window is invalid." }, { status: 400 });
+  }
+  const deadline = windowEnd.toUTCString();
 
   // Invites first (the exam works even if emails fail).
   const inviteRows = targets.map((t) => ({
@@ -177,6 +186,8 @@ export async function POST(
         job_title: job.title,
         exam_url: `${origin}/exam/${token}`,
         deadline,
+        available_from: windowStart.toUTCString(),
+        available_until: windowEnd.toUTCString(),
         duration_minutes: String(exam.duration_minutes),
         question_count: String(exam.questions_per_candidate),
         recruiter_name: signature,
@@ -184,7 +195,7 @@ export async function POST(
       return {
         to: t.email,
         subject: renderTemplate(template.subject ?? "", fields),
-        text: renderTemplate(template.body ?? "", fields),
+        text: `${renderTemplate(template.body ?? "", fields)}\n\nExam availability\nOpens: ${windowStart.toUTCString()}\nCloses: ${windowEnd.toUTCString()}`,
       };
     });
     const results = await sendEmailBatch(messages);

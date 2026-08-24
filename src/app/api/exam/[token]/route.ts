@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { resolveInvite, sweepTimedOut } from "@/lib/exam-state";
+import { examAvailability, resolveInvite, sweepTimedOut } from "@/lib/exam-state";
 
 /**
  * GET /api/exam/[token] — public state summary for the candidate's exam
@@ -16,16 +16,16 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
   const status = await sweepTimedOut(resolved);
+  const availability = examAvailability(resolved);
   const { invite, exam, job } = resolved;
 
   return NextResponse.json({
-    status,
+    status: status === "invited" && availability.state === "scheduled" ? "scheduled" : status,
     jobTitle: job?.title ?? "the role",
     questions: exam.questions_per_candidate,
     minutes: exam.duration_minutes,
-    deadline: new Date(
-      new Date(invite.created_at).getTime() + exam.start_deadline_hours * 3600_000
-    ).toISOString(),
+    availableFrom: availability.availableFrom,
+    deadline: availability.availableUntil,
     startedAt: invite.started_at,
     endsAt: invite.started_at
       ? new Date(

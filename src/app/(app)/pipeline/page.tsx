@@ -22,7 +22,7 @@ export default async function PipelinePage({
   let query = supabase
     .from("applications")
     .select(
-      "id, status, applied_at, flagged_duplicate, revealed_at, candidates(name, email, source), scores(total_score), jobs(title)"
+      "id, job_id, status, applied_at, flagged_duplicate, revealed_at, candidates(name, email, source), scores(total_score), jobs(title)"
     )
     .order("applied_at", { ascending: true });
   if (jobFilter) query = query.eq("job_id", jobFilter);
@@ -63,23 +63,27 @@ export default async function PipelinePage({
         </div>
         <div className="flex items-center gap-2">
           {jobs && jobs.length > 0 && (
-            <select
-              value={jobFilter ?? ""}
-              onChange={(e) => {
-                window.location.href = e.target.value
-                  ? `/pipeline?job=${e.target.value}`
-                  : "/pipeline";
-              }}
-              className="h-9 rounded-lg border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              aria-label="Filter by job"
-            >
-              <option value="">All jobs</option>
-              {jobs.map((j) => (
-                <option key={j.id} value={j.id}>
-                  {j.title}
-                </option>
-              ))}
-            </select>
+            <form action="/pipeline" className="flex items-center gap-2">
+              <select
+                name="job"
+                defaultValue={jobFilter ?? ""}
+                className="h-9 rounded-lg border border-input bg-card px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label="Filter by job"
+              >
+                <option value="">All jobs</option>
+                {jobs.map((j) => (
+                  <option key={j.id} value={j.id}>
+                    {j.title}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="h-9 rounded-lg border border-input bg-card px-3 text-sm font-medium shadow-sm hover:bg-muted"
+              >
+                Filter
+              </button>
+            </form>
           )}
           <Link
             href="/analytics"

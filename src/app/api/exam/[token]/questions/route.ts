@@ -25,9 +25,13 @@ export async function GET(
 
   const overtime =
     resolved.invite.started_at !== null &&
-    Date.now() >
+    Date.now() > Math.min(
       new Date(resolved.invite.started_at).getTime() +
-        (resolved.exam.duration_minutes * 60 + SUBMIT_GRACE_SECONDS) * 1000;
+        (resolved.exam.duration_minutes * 60 + SUBMIT_GRACE_SECONDS) * 1000,
+      resolved.exam.available_until
+        ? new Date(resolved.exam.available_until).getTime() + SUBMIT_GRACE_SECONDS * 1000
+        : Number.POSITIVE_INFINITY
+    );
   if (overtime) {
     return NextResponse.json({ status: "forfeited" }, { status: 409 });
   }
@@ -67,10 +71,12 @@ export async function GET(
 
   return NextResponse.json({
     questions: payload,
-    endsAt: new Date(
-      new Date(resolved.invite.started_at!).getTime() +
-        resolved.exam.duration_minutes * 60_000
-    ).toISOString(),
+    endsAt: new Date(Math.min(
+      new Date(resolved.invite.started_at!).getTime() + resolved.exam.duration_minutes * 60_000,
+      resolved.exam.available_until
+        ? new Date(resolved.exam.available_until).getTime()
+        : Number.POSITIVE_INFINITY
+    )).toISOString(),
     serverNow: new Date().toISOString(),
   });
 }

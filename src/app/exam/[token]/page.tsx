@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ExamRunner } from "@/components/exam-runner";
-import { resolveInvite, sweepTimedOut } from "@/lib/exam-state";
+import { examAvailability, resolveInvite, sweepTimedOut } from "@/lib/exam-state";
 
 /**
  * Public exam page — the unguessable token in the URL is the candidate's
@@ -17,6 +17,7 @@ export default async function ExamPage({
   if (!resolved) notFound();
 
   const status = await sweepTimedOut(resolved);
+  const availability = examAvailability(resolved);
   const { invite, exam, job } = resolved;
 
   return (
@@ -24,14 +25,12 @@ export default async function ExamPage({
       <ExamRunner
         token={token}
         initial={{
-          status,
+          status: status === "invited" && availability.state === "scheduled" ? "scheduled" : status,
           jobTitle: job?.title ?? "this role",
           questions: exam.questions_per_candidate,
           minutes: exam.duration_minutes,
-          deadlineISO: new Date(
-            new Date(invite.created_at).getTime() +
-              exam.start_deadline_hours * 3600_000
-          ).toISOString(),
+          availableFromISO: availability.availableFrom,
+          deadlineISO: availability.availableUntil,
           startedAtISO: invite.started_at,
           endsAtISO: invite.started_at
             ? new Date(

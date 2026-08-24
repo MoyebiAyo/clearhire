@@ -44,6 +44,7 @@ interface Initial {
   jobTitle: string;
   questions: number;
   minutes: number;
+  availableFromISO: string;
   deadlineISO: string;
   startedAtISO: string | null;
   endsAtISO: string | null;
@@ -335,6 +336,17 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
               result. If this felt wrong, reply to your invitation email.
             </p>
           </>
+        ) : initial.status === "scheduled" ? (
+          <>
+            <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
+              <AlarmClock className="size-7" aria-hidden />
+            </span>
+            <h1 className="mt-4 text-xl font-semibold">The assessment is not open yet</h1>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              This exam opens on {new Date(initial.availableFromISO).toLocaleString()}.
+              Return during the window shown in your invitation.
+            </p>
+          </>
         ) : (
           <>
             <span className="flex size-14 items-center justify-center rounded-full bg-muted text-muted-foreground">
@@ -377,7 +389,9 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
               </Badge>
               <Badge variant="secondary">
                 <AlarmClock className="size-3.5" aria-hidden />
-                Start before {new Date(initial.deadlineISO).toLocaleString()}
+                {initial.status === "scheduled"
+                  ? `Opens ${new Date(initial.availableFromISO).toLocaleString()}`
+                  : `Closes ${new Date(initial.deadlineISO).toLocaleString()}`}
               </Badge>
             </div>
 
@@ -403,8 +417,14 @@ export function ExamRunner({ token, initial }: { token: string; initial: Initial
               </ul>
             </div>
 
-            <Button className="w-full" size="lg" onClick={startExam} loading={starting}>
-              I&apos;m ready — start the exam
+            <Button
+              className="w-full"
+              size="lg"
+              onClick={startExam}
+              loading={starting}
+              disabled={initial.status === "scheduled"}
+            >
+              {initial.status === "scheduled" ? "Exam not open yet" : "I'm ready — start the exam"}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
               Make sure you have an uninterrupted {initial.minutes} minutes and a

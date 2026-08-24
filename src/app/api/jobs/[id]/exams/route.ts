@@ -33,7 +33,7 @@ export async function POST(
     .maybeSingle();
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
 
-  let body: Record<string, number> = {};
+  let body: Record<string, number | string> = {};
   try {
     body = (await request.json()) as Record<string, number>;
   } catch {
@@ -61,6 +61,8 @@ export async function POST(
       start_deadline_hours: config.startDeadlineHours,
       weight_cv: config.weightCv,
       weight_exam: config.weightExam,
+      available_from: config.availableFrom,
+      available_until: config.availableUntil,
     })
     .select("id, bank_size, questions_per_candidate, duration_minutes, start_deadline_hours, weight_cv, weight_exam, status, created_at")
     .single();
@@ -86,7 +88,7 @@ export async function GET(
   const { data: exam } = await supabase
     .from("exams")
     .select(
-      "id, status, bank_size, questions_per_candidate, duration_minutes, start_deadline_hours, weight_cv, weight_exam, created_at"
+       "id, status, bank_size, questions_per_candidate, duration_minutes, start_deadline_hours, weight_cv, weight_exam, available_from, available_until, created_at"
     )
     .eq("job_id", id)
     .order("created_at", { ascending: false })
