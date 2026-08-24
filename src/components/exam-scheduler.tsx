@@ -113,9 +113,25 @@ export function ExamScheduler({
       const activated = await activate.json();
       if (!activate.ok) throw new Error(activated.error ?? "Couldn't activate the exam.");
 
-      toast.success(
-        `Exam scheduled for ${activated.invited} candidate${activated.invited === 1 ? "" : "s"}; ${activated.emailed} email${activated.emailed === 1 ? "" : "s"} sent.`
-      );
+      const failedCount = Array.isArray(activated.failed) ? activated.failed.length : 0;
+      if (failedCount > 0 || activated.emailed !== activated.invited) {
+        const firstReason = activated.failed?.[0]?.error as string | undefined;
+        toast.warning(
+          `Exam scheduled, but ${failedCount || activated.invited - activated.emailed} invitation email${failedCount === 1 ? "" : "s"} failed.`,
+          {
+            description:
+              firstReason?.startsWith("resend-403")
+                ? "The sender domain is not authorized by Resend. Verify EMAIL_FROM and the domain in Resend."
+                : firstReason === "email-not-configured"
+                  ? "RESEND_API_KEY is missing in the deployed environment."
+                  : "The exam links were created. Check the candidate addresses and Resend delivery logs, then retry the invitations.",
+          }
+        );
+      } else {
+        toast.success(
+          `Exam scheduled for ${activated.invited} candidate${activated.invited === 1 ? "" : "s"}; ${activated.emailed} email${activated.emailed === 1 ? "" : "s"} accepted by Resend.`
+        );
+      }
       setOpen(false);
       router.refresh();
     } catch (error) {

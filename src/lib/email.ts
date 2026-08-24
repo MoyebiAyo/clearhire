@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { batchEmailIds } from "@/lib/email-response";
 
 /**
  * Outbound email via Resend's REST API (fetch — no SDK). Every send is
@@ -122,8 +123,12 @@ export async function sendEmailBatch(
         const err = `resend-${res.status}: ${body.slice(0, 120)}`;
         slice.forEach((_, j) => (results[i + j] = { ok: false, error: err }));
       } else {
-        // Resend returns one created-email object per message, in order.
-        const data = (await res.json()) as { id?: string }[];
+        // Resend returns { data: [{ id }, ...] } for batch sends. Accept the
+        // bare array too so provider response changes fail closed per item.
+        const payload = (await res.json()) as
+          | { data?: { id?: string }[] }
+          | { id?: string }[];
+        const data = batchEmailIds(payload);
         slice.forEach((_, j) => {
           const sent = data?.[j];
           results[i + j] = sent?.id

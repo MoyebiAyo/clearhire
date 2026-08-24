@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 
 import { NextResponse } from "next/server";
 
-import { logEmail, renderTemplate, sendEmailBatch } from "@/lib/email";
+import { emailConfigured, logEmail, renderTemplate, sendEmailBatch } from "@/lib/email";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -178,7 +178,11 @@ export async function POST(
 
   const failed: { email: string; error: string }[] = [];
   let emailed = 0;
-  if (sendEmails && template) {
+  if (sendEmails && !template) {
+    targets.forEach((t) => failed.push({ email: t.email, error: "exam-invite-template-not-found" }));
+  } else if (sendEmails && !emailConfigured()) {
+    targets.forEach((t) => failed.push({ email: t.email, error: "email-not-configured" }));
+  } else if (sendEmails && template) {
     const messages = targets.map((t) => {
       const token = tokenByApp.get(t.id) ?? t.token;
       const fields = {
