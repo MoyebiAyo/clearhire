@@ -71,6 +71,17 @@ function providers(): Provider[] {
       model: DEFAULT_MODEL,
     });
   }
+  // Third Groq key — same automatic failover, no downtime between keys.
+  // Set GROQ_FALLBACK_API_KEY_2 in .env.local and Vercel. The chain tries
+  // groq → groq-backup → groq-backup-2 in order with the same retries/backoff.
+  if (process.env.GROQ_FALLBACK_API_KEY_2) {
+    list.push({
+      name: "groq-backup-2",
+      baseUrl: process.env.GROQ_BASE_URL || DEFAULT_BASE_URL,
+      apiKey: process.env.GROQ_FALLBACK_API_KEY_2,
+      model: DEFAULT_MODEL,
+    });
+  }
   if (process.env.FALLBACK_AI_BASE_URL && process.env.FALLBACK_AI_API_KEY) {
     list.push({
       name: "fallback",
