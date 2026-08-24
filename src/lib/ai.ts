@@ -162,6 +162,13 @@ async function callOnce<T>(provider: Provider, opts: ChatJsonOptions): Promise<T
   try {
     return JSON.parse(content) as T;
   } catch {
+    // Some small models occasionally wrap JSON in prose despite json_object mode.
+    const match = content.match(/\{[\s\S]*\}/);
+    if (match) {
+      try {
+        return JSON.parse(match[0]) as T;
+      } catch {}
+    }
     throw new AiError(`${provider.name} returned invalid JSON: ${content.slice(0, 200)}`);
   }
 }

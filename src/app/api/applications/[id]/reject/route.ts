@@ -87,12 +87,26 @@ Context: job_title=${job.title}, sender org=${recruiterName}.`;
         model: "openai/gpt-oss-20b",
         maxTokens: 700,
       });
+      const draftSubject = body?.subject || raw.subject || subject;
+      const draftBody = raw.body || "";
+      if (!draftBody.trim()) throw new Error("empty draft");
       return NextResponse.json({
-        subject: body?.subject || raw.subject || subject,
-        body: raw.body || "",
+        subject: draftSubject,
+        body: draftBody,
         dry_run: true,
       });
     } catch (err) {
+      // Intermittent small-model JSON glitches should not block the recruiter.
+      const msg = err instanceof Error ? err.message : String(err);
+      const isInvalidJson = msg.includes("invalid JSON") || msg.includes("unexpected response");
+      if (isInvalidJson) {
+        const fallbackBody = `Dear {{candidate_name}},\n\nThank you for your interest in the {{job_title}} role and for sharing your experience with us. We appreciated learning more about you.\n\nAfter careful review, we will not be moving forward at this time as this round was highly competitive. This reflects the specific mix for this opening, not the value of your background.\n\nPlease keep an eye on future openings — we would welcome another application when a closer match appears.\n\nWarm regards,\n{{recruiter_name}}`;
+        return NextResponse.json({
+          subject: body?.subject || subject,
+          body: fallbackBody,
+          dry_run: true,
+        });
+      }
       return NextResponse.json(
         { error: `Couldn't draft the rejection — ${aiUserMessage(err)}` },
         { status: 502 }
