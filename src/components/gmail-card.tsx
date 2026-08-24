@@ -184,7 +184,3 @@ function VerificationNote() {
     </div>
   );
 }
-      </CardContent>
-    </Card>
-  );
-}
