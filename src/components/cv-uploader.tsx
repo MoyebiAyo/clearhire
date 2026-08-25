@@ -108,7 +108,7 @@ export function CvUploader({
       if (created.length > 0) {
         toast.success(
           `${created.length} CV${created.length === 1 ? "" : "s"} added`,
-          { description: "Raw text extracted and stored, ready for Week 2 scoring." }
+          { description: "Raw text extracted and stored, ready for scoring." }
         );
         setFiles((prev) => prev.filter((f) => !created.some((c) => c.filename === f.name)));
         router.refresh();

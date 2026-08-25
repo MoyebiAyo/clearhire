@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Briefcase, FileText, Scale, Users } from "lucide-react";
+import { ArrowRight, Briefcase, FileText, Users } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -110,12 +110,6 @@ export default async function DashboardPage() {
         </Card>
       )}
 
-      <p className="flex items-start gap-2 rounded-lg bg-muted p-4 text-sm text-muted-foreground">
-        <Scale className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden />
-        Coming in Week 2: every uploaded CV gets parsed and scored 0–100 per
-        criterion against your rubric — identities stay hidden until you click
-        Reveal, and scores are locked before you can see them.
-      </p>
     </div>
   );
 }
