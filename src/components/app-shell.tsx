@@ -44,6 +44,7 @@ export function AppShell({
             CH
           </span>
           <span className="font-semibold tracking-tight">ClearHire</span>
+          <span className="text-[10px] font-medium tracking-wide text-muted-foreground">BF-0414</span>
         </div>
         <nav className="flex-1 space-y-1 px-3" aria-label="Main">
           {NAV.map(({ href, label, icon: Icon }) => {
@@ -90,6 +91,7 @@ export function AppShell({
               CH
             </span>
             <span className="text-sm font-semibold">ClearHire</span>
+            <span className="text-[9px] font-medium tracking-wide text-muted-foreground">BF-0414</span>
           </div>
           <p className="hidden text-sm font-medium md:block">
             {orgName || "Your workspace"}
