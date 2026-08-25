@@ -286,6 +286,16 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
       <Button variant="outline" onClick={() => setOpen(true)}>
         <Sparkles aria-hidden /> Ask AI
       </Button>
+      {!open && (
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-label="Open AI copilot"
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-lg transition hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <Sparkles className="size-4" aria-hidden /> Ask AI
+        </button>
+      )}
 
       {open && (
         <div
