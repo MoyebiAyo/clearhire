@@ -59,15 +59,18 @@ export function AuthForm() {
           setError(error.message);
           return;
         }
+        if (orgName && data.user) {
+          await supabase
+            .from("recruiters")
+            .update({ org_name: orgName.trim() })
+            .eq("id", data.user.id);
+        }
         if (data.session) {
           router.replace("/dashboard");
           router.refresh();
         } else {
           // Email confirmation is enabled on the Supabase project.
           setNeedsConfirmation(true);
-          if (orgName && data.user) {
-            await supabase.from("recruiters").update({ org_name: orgName }).eq("id", data.user.id);
-          }
         }
       }
     } catch {
