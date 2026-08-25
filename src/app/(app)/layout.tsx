@@ -21,12 +21,21 @@ export default async function AppLayout({
     .eq("id", user.id)
     .maybeSingle();
 
+  const metadataOrgName =
+    typeof user.user_metadata?.org_name === "string"
+      ? user.user_metadata.org_name.trim()
+      : "";
+  const orgName = recruiter?.org_name?.trim() || metadataOrgName || null;
+
   if (!recruiter) {
-    await supabase.from("recruiters").insert({ id: user.id });
+    await supabase.from("recruiters").insert({ id: user.id, org_name: orgName });
+  } else if (!recruiter.org_name?.trim() && orgName) {
+    // Backfill profiles created before signup organization names were persisted.
+    await supabase.from("recruiters").update({ org_name: orgName }).eq("id", user.id);
   }
 
   return (
-    <AppShell orgName={recruiter?.org_name ?? null} email={user.email ?? ""}>
+    <AppShell orgName={orgName} email={user.email ?? ""}>
       {children}
     </AppShell>
   );
