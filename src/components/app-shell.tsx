@@ -37,8 +37,8 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
+    <div className="flex h-dvh overflow-hidden">
+      <aside className="hidden h-dvh w-60 shrink-0 flex-col border-r border-border bg-card md:flex">
         <div className="flex items-center gap-2 px-5 py-5">
           <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-xs font-bold text-primary-foreground">
             CH
@@ -74,8 +74,8 @@ export function AppShell({
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex min-h-14 items-center justify-between gap-3 border-b border-border bg-card px-4 sm:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <header className="z-30 flex min-h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 sm:px-6">
           <div className="flex items-center gap-3 md:hidden">
             <button
               type="button"
@@ -130,7 +130,9 @@ export function AppShell({
             </nav>
           </div>
         )}
-        <main className="min-w-0 flex-1 p-4 sm:p-6 lg:p-8">{children}</main>
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:p-8">
+          {children}
+        </main>
       </div>
     </div>
   );
