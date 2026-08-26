@@ -4,7 +4,7 @@ import { aiUserMessage, chatJSON } from "@/lib/ai";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
-import { validCopilotStage } from "@/lib/copilot-action";
+import { confirmedEmailIntent, validCopilotStage } from "@/lib/copilot-action";
 
 export const maxDuration = 60;
 
@@ -257,6 +257,14 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
       action = { name: "exam_resend", args: { targetRanks: inferredRanks } } as any;
       answer = `Got it — I will resend the exam invitation for Candidate #${inferredRanks.join(", #")} — confirm on the card below and I will deliver it.`;
     }
+  }
+  // Follow-up confirmations such as “go ahead” must preserve the prior email
+  // intent. Rebuild it from conversation text instead of trusting the model to
+  // repeat the structured action on every turn.
+  const confirmed = confirmedEmailIntent(conversation, lastUser);
+  if (!action && confirmed) {
+    action = { name: "email_send", args: { kind: confirmed.kind, targetRanks: [confirmed.rank] } };
+    answer = `Ready to send the ${confirmed.kind} email to Candidate #${confirmed.rank}. Confirm on the card below.`;
   }
 
   // Resolve proposals deterministically in code.
