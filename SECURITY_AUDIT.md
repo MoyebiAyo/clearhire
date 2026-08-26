@@ -45,7 +45,7 @@ Severity: High
 
 Locations:
 
-- `supabase/migrations/0005_week5_intake.sql:62-79`
+- `supabase/migrations/0005_intake.sql:62-79`
 - `src/app/api/gmail/callback/route.ts:65-71`
 - `src/lib/mailbox.ts:70-76`
 
