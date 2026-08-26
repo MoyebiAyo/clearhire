@@ -361,30 +361,36 @@ export default async function JobDetailPage({
         }))}
       />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Recent email delivery</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Provider IDs confirm that Resend accepted the message. Missing IDs
-            need attention or a retry.
-          </p>
-        </CardHeader>
-        <CardContent className="divide-y divide-border p-0">
+      <details className="group rounded-xl border border-border bg-card shadow-sm">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5">
+          <div className="min-w-0">
+            <p className="text-sm font-medium">Email activity</p>
+            <p className="text-xs text-muted-foreground">
+              {(emailRows ?? []).filter((email) => email.provider_message_id).length} sent
+              {(emailRows ?? []).some((email) => !email.provider_message_id)
+                ? ` · ${(emailRows ?? []).filter((email) => !email.provider_message_id).length} need attention`
+                : ""}
+            </p>
+          </div>
+          <span className="text-xs font-medium text-primary group-open:hidden">View history</span>
+          <span className="hidden text-xs font-medium text-primary group-open:inline">Hide history</span>
+        </summary>
+        <div className="max-h-72 divide-y divide-border overflow-y-auto border-t border-border">
           {(emailRows ?? []).length === 0 ? (
-            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-6">No emails sent for this job yet.</p>
+            <p className="px-4 py-4 text-sm text-muted-foreground sm:px-5">No emails sent for this job yet.</p>
           ) : (emailRows ?? []).map((email) => (
-            <div key={email.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-              <div className="min-w-0">
+            <div key={email.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-5">
+              <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{email.subject}</p>
-                <p className="break-all text-xs text-muted-foreground">{email.to_email} · {email.type} · {formatDate(email.sent_at)}</p>
+                <p className="break-all text-xs text-muted-foreground">{email.to_email} · {email.type.replaceAll("_", " ")} · {formatDate(email.sent_at)}</p>
               </div>
               <Badge variant={email.provider_message_id ? "success" : "warning"}>
-                {email.provider_message_id ? "Accepted by Resend" : "Unconfirmed delivery"}
+                {email.provider_message_id ? "Sent" : "Needs attention"}
               </Badge>
             </div>
           ))}
-        </CardContent>
-      </Card>
+        </div>
+      </details>
 
       <JobStage
         jobId={job.id}
