@@ -49,14 +49,18 @@ export async function POST(
       return NextResponse.json({ status: "forfeited", score: invite.score });
     }
     const graded = await gradeAttempt(resolved, answers);
-    await admin
-      .from("exam_invites")
-      .update({
-        submitted_at: new Date().toISOString(),
-        score: graded.score,
-      })
-      .eq("id", invite.id);
-    return NextResponse.json({ status: "forfeited", score: graded.score });
+    const { data: completed, error } = await admin.rpc("complete_exam_invite", {
+      p_invite: invite.id,
+      p_status: "forfeited",
+      p_score: graded.score,
+    });
+    if (error) return NextResponse.json({ error: "submit_failed" }, { status: 500 });
+    const row = Array.isArray(completed) ? completed[0] : completed;
+    if (!row) {
+      const current = await resolveInvite(token);
+      return NextResponse.json({ status: current?.invite.status ?? "forfeited", score: current?.invite.score ?? invite.score });
+    }
+    return NextResponse.json({ status: row.status, score: row.score });
   }
 
   if (status !== "in_progress") {
@@ -75,19 +79,22 @@ export async function POST(
   const finalStatus = body.forfeit || overtime ? "forfeited" : "submitted";
 
   const graded = await gradeAttempt(resolved, answers);
-  await admin
-    .from("exam_invites")
-    .update({
-      status: finalStatus,
-      submitted_at: new Date().toISOString(),
-      score: graded.score,
-    })
-    .eq("id", invite.id);
+  const { data: completed, error } = await admin.rpc("complete_exam_invite", {
+    p_invite: invite.id,
+    p_status: finalStatus,
+    p_score: graded.score,
+  });
+  if (error) return NextResponse.json({ error: "submit_failed" }, { status: 500 });
+  const row = Array.isArray(completed) ? completed[0] : completed;
+  if (!row) {
+    const current = await resolveInvite(token);
+    return NextResponse.json({ status: current?.invite.status ?? invite.status, score: current?.invite.score ?? invite.score });
+  }
 
   return NextResponse.json({
-    status: finalStatus,
-    score: graded.score,
+    status: row.status,
+    score: row.score,
     answered: graded.answered,
     drawn: graded.drawn,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

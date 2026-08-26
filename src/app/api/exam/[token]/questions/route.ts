@@ -78,5 +78,5 @@ export async function GET(
         : Number.POSITIVE_INFINITY
     )).toISOString(),
     serverNow: new Date().toISOString(),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { ingestCv } from "@/lib/intake";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+const MAX_ATTACHMENT_BYTES = 15 * 1024 * 1024;
+
 /**
  * Shared Gmail inbox scanner (spec 2.1 email intake), used by BOTH:
  *  - the global poll (cron / Settings "Poll now") — routes each CV email to
@@ -178,6 +180,15 @@ export async function pollConnection(
       }
       continue;
     }
+    if ((part.body.size ?? 0) > MAX_ATTACHMENT_BYTES) {
+      await admin.from("processed_emails").insert({
+        message_id: msg.id,
+        recruiter_id: conn.recruiter_id,
+        action: "skipped",
+        detail: { subject, reason: "CV attachment exceeds 15 MB" },
+      });
+      continue;
+    }
 
     // Scoped: bail before the attachment fetch if the email isn't about
     // this job — Gmail API calls aren't free.
@@ -194,6 +205,7 @@ export async function pollConnection(
     const att = (await attRes.json()) as { data?: string; size?: number };
     if (!att.data) continue;
     const buffer = Buffer.from(att.data, "base64");
+    if (buffer.byteLength > MAX_ATTACHMENT_BYTES) continue;
 
     const job = matchJob(subject, full.snippet ?? "", openJobs);
     if (!job) {

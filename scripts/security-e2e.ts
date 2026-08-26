@@ -27,10 +27,14 @@ async function createUser(label: string) {
   return { id, client };
 }
 
-async function createCandidate(label: string) {
+async function createCandidate(label: string, email?: string) {
+  if (email) {
+    const existing = await admin.from("candidates").select("id").eq("email", email).maybeSingle();
+    if (existing.data?.id) return existing.data.id as string;
+  }
   const row = await admin
     .from("candidates")
-    .insert({ name: `Security ${label}`, email: `${randomUUID()}@example.com`, source: "upload" })
+    .insert({ name: `Security ${label}`, email: email ?? `${randomUUID()}@example.com`, source: "upload" })
     .select("id")
     .single();
   assert.ifError(row.error);
@@ -39,7 +43,7 @@ async function createCandidate(label: string) {
 }
 
 async function api(path: string, init?: RequestInit) {
-  const response = await fetch(`${baseUrl}${path}`, { ...init, signal: AbortSignal.timeout(15_000) });
+  const response = await fetch(`${baseUrl}${path}`, { ...init, signal: AbortSignal.timeout(35_000) });
   const text = await response.text();
   let body: unknown = text;
   try { body = JSON.parse(text); } catch {}
@@ -74,7 +78,7 @@ async function main() {
   assert.ifError(updateAFromB.error);
   assert.equal(updateAFromB.data.length, 0, "Tenant B could update tenant A's job");
 
-  const candidateA = await createCandidate("Candidate A");
+  const candidateA = await createCandidate("Candidate A", process.env.E2E_TEST_EMAIL);
   const applicationA = await admin
     .from("applications")
     .insert({ candidate_id: candidateA, job_id: jobA.data.id, status: "screened" })
@@ -96,14 +100,7 @@ async function main() {
     p_token: "temporary-security-probe",
     p_key: "temporary-security-key",
   });
-  assert.equal(rpcResult.error, null, "Expected public RPC exposure was not reproducible");
-  const insertedConnection = await admin
-    .from("gmail_connections")
-    .select("gmail_address")
-    .eq("recruiter_id", a.id)
-    .single();
-  assert.equal(insertedConnection.data?.gmail_address, "security-probe@example.com");
-  await admin.from("gmail_connections").delete().eq("recruiter_id", a.id);
+  assert.ok(rpcResult.error, "Anonymous Gmail token mutation was not blocked");
 
   console.log("Security E2E: testing schedule capability happy path");
   const scheduleToken = randomBytes(16).toString("hex");

@@ -44,6 +44,7 @@ export async function GET(
     headers: {
       "Content-Type": "text/calendar; charset=utf-8",
       "Content-Disposition": 'attachment; filename="interview.ics"',
+      "Cache-Control": "private, no-store",
     },
   });
 }

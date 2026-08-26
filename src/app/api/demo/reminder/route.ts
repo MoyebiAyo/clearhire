@@ -66,7 +66,7 @@ export async function POST(request: Request) {
   }
   void armed;
 
-  const { status, body: result } = await runDueReminders();
+  const { status, body: result } = await runDueReminders(user.id);
   return NextResponse.json(
     { armed: true, result },
     { status: status === 502 ? 502 : 200 }

@@ -24,6 +24,9 @@ export function JobForm() {
   const [title, setTitle] = useState("");
   const [jdText, setJdText] = useState("");
   const [weights, setWeights] = useState(DEFAULTS);
+  const [requirements, setRequirements] = useState<
+    { requirement: string; type: "hard" | "nice-to-have" }[]
+  >([{ requirement: "", type: "hard" }]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -47,7 +50,12 @@ export function JobForm() {
       const res = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, jd_text: jdText, ...weights }),
+        body: JSON.stringify({
+          title,
+          jd_text: jdText,
+          ...weights,
+          requirements: requirements.filter((item) => item.requirement.trim()),
+        }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -94,6 +102,45 @@ export function JobForm() {
               against. The more complete it is, the fairer the scoring.
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="space-y-4 p-4 sm:p-6">
+          <div>
+            <h2 className="font-medium">Role requirements</h2>
+            <p className="text-xs text-muted-foreground">
+              Mark what is mandatory and what is preferred. ClearHire preserves
+              these labels when it explains candidate gaps.
+            </p>
+          </div>
+          <div className="space-y-2">
+            {requirements.map((item, index) => (
+              <div key={index} className="grid gap-2 sm:grid-cols-[1fr_9rem_auto]">
+                <Input
+                  aria-label={`Requirement ${index + 1}`}
+                  placeholder="e.g. 4+ years backend experience"
+                  value={item.requirement}
+                  onChange={(event) => setRequirements((current) => current.map((entry, i) => i === index ? { ...entry, requirement: event.target.value } : entry))}
+                />
+                <select
+                  aria-label={`Requirement ${index + 1} importance`}
+                  value={item.type}
+                  onChange={(event) => setRequirements((current) => current.map((entry, i) => i === index ? { ...entry, type: event.target.value as "hard" | "nice-to-have" } : entry))}
+                  className="h-9 rounded-lg border border-input bg-card px-3 text-sm"
+                >
+                  <option value="hard">Mandatory</option>
+                  <option value="nice-to-have">Preferred</option>
+                </select>
+                <Button type="button" variant="ghost" onClick={() => setRequirements((current) => current.filter((_, i) => i !== index))} disabled={requirements.length === 1}>
+                  Remove
+                </Button>
+              </div>
+            ))}
+          </div>
+          <Button type="button" variant="outline" onClick={() => setRequirements((current) => [...current, { requirement: "", type: "hard" }])} disabled={requirements.length >= 30}>
+            Add requirement
+          </Button>
         </CardContent>
       </Card>
 

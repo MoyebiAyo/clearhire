@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 
 import { buildIcs, emailConfigured, logEmail, sendEmail } from "@/lib/email";
-import { createReminderJobs } from "@/lib/reminders";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { one } from "@/lib/utils";
 
@@ -72,7 +71,7 @@ export async function GET(
     slots: (row.offered_slots ?? []).filter((s) => new Date(s).getTime() > Date.now()),
     scheduled_time: row.scheduled_time,
     status: row.status,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(
@@ -100,16 +99,15 @@ export async function POST(
   }
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("interviews")
-    .update({ scheduled_time: slot })
-    .eq("id", row.id);
+  const { data: confirmed, error } = await admin.rpc("confirm_interview_slot", {
+    p_token: token,
+    p_slot: slot,
+  });
   if (error) {
     return NextResponse.json({ error: "update_failed" }, { status: 500 });
   }
-
-  // Spec 2.4: on confirmation, exactly 4 reminder rows (2d/1d/12h/2h before).
-  await createReminderJobs(admin, row.id, new Date(slot));
+  const confirmation = Array.isArray(confirmed) ? confirmed[0] : confirmed;
+  if (!confirmation) return NextResponse.json({ error: "already_scheduled" }, { status: 409 });
 
   // Confirmation email with .ics — non-blocking on failure.
   const app2 = one<{ id: string; candidates: unknown; jobs: unknown }>(row.applications);
@@ -150,5 +148,5 @@ export async function POST(
     scheduled_time: slot,
     email_sent: emailSent,
     ics_url: `/api/schedule/${token}/ics`,
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

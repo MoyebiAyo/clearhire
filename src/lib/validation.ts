@@ -31,6 +31,11 @@ const weight = z
   .min(0, "Weights can't be negative")
   .max(100, "Weights can't exceed 100");
 
+export const jobRequirementSchema = z.object({
+  requirement: z.string().trim().min(2).max(240),
+  type: z.enum(["hard", "nice-to-have"]),
+});
+
 export const jobSchema = z
   .object({
     title: z.string().trim().min(3, "Give the job a title (3+ characters)"),
@@ -42,6 +47,7 @@ export const jobSchema = z
     weight_experience: weight,
     weight_certifications: weight,
     weight_tools: weight,
+    requirements: z.array(jobRequirementSchema).max(30).default([]),
   })
   .refine(
     (v) =>

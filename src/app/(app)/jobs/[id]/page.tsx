@@ -40,10 +40,19 @@ export default async function JobDetailPage({
   const { data: appRows } = await supabase
     .from("applications")
     .select(
-      "id, status, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(id, name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), interviews(id, status, scheduled_time, schedule_token, interviewer, location_or_link, interview_scorecards(interviewer_rating, interviewer_notes))"
+      "id, status, applied_at, flagged_duplicate, revealed_at, cv_file_path, candidates(id, name, email, source), cv_extractions(skills, extract_error), scores(skills_score, experience_score, certifications_score, tools_score, total_score, gaps, rationale), interviews(id, status, scheduled_time, schedule_token, interviewer, location_or_link, interview_scorecards(interviewer_rating, interviewer_notes, criteria_scores, weighted_rating))"
     )
     .eq("job_id", id)
     .order("applied_at", { ascending: false });
+  const applicationIds = (appRows ?? []).map((row) => row.id);
+  const { data: emailRows } = applicationIds.length > 0
+    ? await supabase
+        .from("email_log")
+        .select("id, type, to_email, subject, sent_at, provider_message_id")
+        .in("application_id", applicationIds)
+        .order("sent_at", { ascending: false })
+        .limit(8)
+    : { data: [] };
 
   const { data: templateRows } = await supabase
     .from("email_templates")
@@ -124,7 +133,7 @@ export default async function JobDetailPage({
           interviewer: string | null;
           location_or_link: string | null;
           interview_scorecards:
-            | { interviewer_rating: number; interviewer_notes: string | null }[]
+            | { interviewer_rating: number; interviewer_notes: string | null; criteria_scores: Record<string, number> | null; weighted_rating: number | null }[]
             | null;
         }[]
       | null;
@@ -170,7 +179,9 @@ export default async function JobDetailPage({
             location_or_link: interview.location_or_link,
             scorecard: interview.interview_scorecards?.[0]
               ? {
-                  rating: Number(interview.interview_scorecards[0].interviewer_rating),
+                   rating: Number(interview.interview_scorecards[0].interviewer_rating),
+                   weightedRating: interview.interview_scorecards[0].weighted_rating === null ? null : Number(interview.interview_scorecards[0].weighted_rating),
+                   criteriaScores: interview.interview_scorecards[0].criteria_scores,
                   notes: interview.interview_scorecards[0].interviewer_notes,
                 }
               : null,
@@ -317,7 +328,16 @@ export default async function JobDetailPage({
             <p className="whitespace-pre-wrap break-words border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground">
               {job.jd_text}
             </p>
-          </details>
+            </details>
+            {Array.isArray(job.requirements) && job.requirements.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {job.requirements.map((requirement: { requirement: string; type: string }) => (
+                  <Badge key={`${requirement.type}-${requirement.requirement}`} variant={requirement.type === "hard" ? "destructive" : "secondary"}>
+                    {requirement.type === "hard" ? "Mandatory" : "Preferred"}: {requirement.requirement}
+                  </Badge>
+                ))}
+              </div>
+            )}
         </CardContent>
       </Card>
 
@@ -340,6 +360,31 @@ export default async function JobDetailPage({
           status: row.status,
         }))}
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Recent email delivery</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Provider IDs confirm that Resend accepted the message. Missing IDs
+            need attention or a retry.
+          </p>
+        </CardHeader>
+        <CardContent className="divide-y divide-border p-0">
+          {(emailRows ?? []).length === 0 ? (
+            <p className="px-4 py-5 text-sm text-muted-foreground sm:px-6">No emails sent for this job yet.</p>
+          ) : (emailRows ?? []).map((email) => (
+            <div key={email.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium">{email.subject}</p>
+                <p className="break-all text-xs text-muted-foreground">{email.to_email} · {email.type} · {formatDate(email.sent_at)}</p>
+              </div>
+              <Badge variant={email.provider_message_id ? "success" : "warning"}>
+                {email.provider_message_id ? "Accepted by Resend" : "Unconfirmed delivery"}
+              </Badge>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <JobStage
         jobId={job.id}

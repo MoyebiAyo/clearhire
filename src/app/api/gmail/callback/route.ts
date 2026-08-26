@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -11,17 +12,28 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: Request) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code");
-  const origin = url.origin;
+  const origin = process.env.APP_ORIGIN || url.origin;
+  const state = url.searchParams.get("state");
+  const expectedState = request.headers.get("cookie")?.match(/(?:^|; )gmail_oauth_state=([^;]+)/)?.[1];
+  const validState = Boolean(
+    state && expectedState && state.length === expectedState.length &&
+      timingSafeEqual(Buffer.from(state), Buffer.from(expectedState))
+  );
+  const clearState = (response: NextResponse) => {
+    response.cookies.set("gmail_oauth_state", "", { maxAge: 0, path: "/api/gmail/callback" });
+    return response;
+  };
   if (!code) {
-    return NextResponse.redirect(`${origin}/settings?gmail=error`);
+    return clearState(NextResponse.redirect(`${origin}/settings?gmail=error`));
   }
+  if (!validState) return clearState(NextResponse.redirect(`${origin}/settings?gmail=error`));
 
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login`);
+    return clearState(NextResponse.redirect(`${origin}/login`));
   }
 
   try {
@@ -71,8 +83,8 @@ export async function GET(request: Request) {
     });
     if (error) throw new Error(error.message);
 
-    return NextResponse.redirect(`${origin}/settings?gmail=connected`);
+    return clearState(NextResponse.redirect(`${origin}/settings?gmail=connected`));
   } catch {
-    return NextResponse.redirect(`${origin}/settings?gmail=error`);
+    return clearState(NextResponse.redirect(`${origin}/settings?gmail=error`));
   }
 }

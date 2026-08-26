@@ -50,6 +50,7 @@ export async function resolveInvite(token: string): Promise<ResolvedInvite | nul
 
   const examRow = Array.isArray(data.exams) ? data.exams[0] : data.exams;
   if (!examRow) return null;
+  if (examRow.status !== "active") return null;
   const jobRow = Array.isArray(examRow.jobs) ? examRow.jobs[0] : examRow.jobs;
 
   return {
@@ -95,7 +96,7 @@ export async function sweepTimedOut(resolved: ResolvedInvite): Promise<string> {
       ? new Date(exam.available_until).getTime()
       : new Date(invite.created_at).getTime() + exam.start_deadline_hours * 3600_000;
     if (now > deadline) {
-      await admin.from("exam_invites").update({ status: "expired" }).eq("id", invite.id);
+      await admin.from("exam_invites").update({ status: "expired" }).eq("id", invite.id).eq("status", "invited");
       return "expired";
     }
     return "invited";
@@ -108,7 +109,7 @@ export async function sweepTimedOut(resolved: ResolvedInvite): Promise<string> {
       exam.available_until
     ) + SUBMIT_GRACE_SECONDS * 1000;
     if (now > endTime) {
-      await admin.from("exam_invites").update({ status: "forfeited" }).eq("id", invite.id);
+      await admin.from("exam_invites").update({ status: "forfeited" }).eq("id", invite.id).eq("status", "in_progress");
       return "forfeited";
     }
     return "in_progress";

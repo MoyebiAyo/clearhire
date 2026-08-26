@@ -53,7 +53,7 @@ export async function POST(
   const { data: job } = await supabase
     .from("jobs")
     .select(
-      "id, jd_text, weight_skills, weight_experience, weight_certifications, weight_tools, requirements_cache"
+      "id, jd_text, weight_skills, weight_experience, weight_certifications, weight_tools, requirements, requirements_cache"
     )
     .eq("id", jobId)
     .maybeSingle();
@@ -62,7 +62,10 @@ export async function POST(
   }
 
   // ── Step 1: structured JD requirements (derived once, cached on the job) ──
-  let requirements = (job.requirements_cache as Requirement[] | null) ?? null;
+  const authored = Array.isArray(job.requirements) ? job.requirements as Requirement[] : [];
+  let requirements = authored.length > 0
+    ? authored
+    : (job.requirements_cache as Requirement[] | null) ?? null;
   if (!requirements) {
     try {
       const raw = await chatJSON({
@@ -175,6 +178,13 @@ Return strict JSON:
 
       const raw = await chatJSON({ user: prompt, purpose: "score", maxTokens: 1500 });
       const parsed = parseScoring(raw);
+      const severityByRequirement = new Map(
+        requirements!.map((requirement) => [requirement.requirement.toLowerCase(), requirement.type])
+      );
+      parsed.gaps = parsed.gaps.map((gap) => ({
+        ...gap,
+        severity: severityByRequirement.get(gap.requirement.toLowerCase()) ?? gap.severity,
+      }));
 
       const total =
         (parsed.skills_score * weights.skills +

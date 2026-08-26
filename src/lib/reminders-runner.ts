@@ -25,21 +25,25 @@ interface DueRow {
 }
 
 
-export async function runDueReminders(): Promise<{ status: number; body: unknown }> {
+export async function runDueReminders(recruiterId?: string): Promise<{ status: number; body: unknown }> {
 const admin = createAdminClient();
 
   // 1. Due + unsent, with everything needed to compose the reminder.
   const { data: dueRows } = await admin
     .from("reminder_jobs")
     .select(
-      "id, offset_label, interviews!inner(id, status, scheduled_time, interviewer, location_or_link, applications(id, candidates(name, email), jobs(title, recruiters(org_name))))"
+      "id, offset_label, interviews!inner(id, status, scheduled_time, interviewer, location_or_link, applications(id, candidates(name, email), jobs(title, recruiter_id, recruiters(id, org_name))))"
     )
     .eq("sent", false)
     .lte("fire_at", new Date().toISOString());
 
-  const due = ((dueRows ?? []) as unknown as DueRow[]).filter(
-    (r) => r.interviews?.status === "scheduled" && r.interviews.scheduled_time
-  );
+  const due = ((dueRows ?? []) as unknown as DueRow[]).filter((r) => {
+    if (r.interviews?.status !== "scheduled" || !r.interviews.scheduled_time) return false;
+    if (!recruiterId) return true;
+    const app = one<{ jobs: unknown }>(r.interviews.applications);
+    const job = one<{ recruiter_id?: string; recruiters?: unknown }>(app?.jobs);
+    return job?.recruiter_id === recruiterId || one<{ id: string }>(job?.recruiters)?.id === recruiterId;
+  });
   const skippedCancelled = (dueRows ?? []).length - due.length;
   if (due.length === 0) {
     return (function json(o: unknown, s?: number) { return { status: s ?? 200, body: o }; })({ due: 0, claimed: 0, sent: 0, skippedCancelled });
@@ -49,13 +53,13 @@ const admin = createAdminClient();
   const firstJob = one<{ recruiters: unknown }>(
     one<{ jobs: unknown }>(due[0].interviews?.applications)?.jobs
   );
-  const recruiterId = one<{ id: string }>(firstJob?.recruiters)?.id;
+  const templateRecruiterId = one<{ id: string }>(firstJob?.recruiters)?.id;
   let template: { subject: string; body: string } | null = null;
-  if (recruiterId) {
+  if (templateRecruiterId) {
     const { data: own } = await admin
       .from("email_templates")
       .select("subject, body")
-      .eq("recruiter_id", recruiterId)
+      .eq("recruiter_id", templateRecruiterId)
       .eq("type", "reminder")
       .limit(1);
     template = own?.[0] ?? null;

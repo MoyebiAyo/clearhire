@@ -39,7 +39,12 @@ export interface InterviewInfo {
   schedule_token: string | null;
   interviewer: string | null;
   location_or_link: string | null;
-  scorecard: { rating: number; notes: string | null } | null;
+  scorecard: {
+    rating: number;
+    weightedRating?: number | null;
+    criteriaScores?: Record<string, number> | null;
+    notes: string | null;
+  } | null;
 }
 
 export interface ShortlistScore {
@@ -736,10 +741,18 @@ function ShortlistCard({
         {s && s.gaps.length === 0 && <Badge variant="success">Meets all requirements</Badge>}
 
         {s?.rationale && (
-          <details className="text-xs">
+          <details className="rounded-lg bg-muted/40 p-3 text-xs">
             <summary className="cursor-pointer font-medium text-primary marker:content-none">
-              Why this score
+              How this score was built
             </summary>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-muted-foreground">
+              {CRITERIA.map(({ key, label, weightKey }) => (
+                <span key={key}>{label}: {Math.round(s[key])} × {weights[weightKey]}%</span>
+              ))}
+            </div>
+            <p className="mt-2 font-medium text-foreground">
+              {s.gaps.filter((gap) => gap.severity === "hard").length} mandatory gap(s) · {s.gaps.filter((gap) => gap.severity !== "hard").length} preferred gap(s)
+            </p>
             <p className="mt-1 leading-relaxed text-muted-foreground">{s.rationale}</p>
           </details>
         )}
@@ -932,7 +945,7 @@ function DetailDrawer({
                     </div>
                     <div className="rounded-lg bg-primary-soft p-2">
                       <p className="text-xs text-primary">Human rating</p>
-                      <p className="text-xl font-semibold tabular-nums">{row.interview.scorecard.rating}/5</p>
+                      <p className="text-xl font-semibold tabular-nums">{row.interview.scorecard.weightedRating ?? row.interview.scorecard.rating}/5</p>
                     </div>
                   </div>
                 )}

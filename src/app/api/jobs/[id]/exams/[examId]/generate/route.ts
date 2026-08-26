@@ -42,7 +42,7 @@ export async function POST(
   // RLS: job must belong to this recruiter.
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, title, jd_text, requirements_cache")
+    .select("id, title, jd_text, requirements, requirements_cache")
     .eq("id", id)
     .maybeSingle();
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
@@ -83,9 +83,11 @@ export async function POST(
     (existingRows ?? []).map((r) => (r.question ?? "").toLowerCase().trim())
   );
 
-  const reqSummary = job.requirements_cache
-    ? JSON.stringify(job.requirements_cache).slice(0, 2500)
-    : "(no cached requirements — rely on the job description)";
+  const reqSummary = Array.isArray(job.requirements) && job.requirements.length > 0
+    ? JSON.stringify(job.requirements).slice(0, 2500)
+    : job.requirements_cache
+      ? JSON.stringify(job.requirements_cache).slice(0, 2500)
+      : "(no cached requirements — rely on the job description)";
 
   let result: { questions?: GeneratedQuestion[] };
   try {

@@ -1,4 +1,6 @@
+import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
 
 /**
  * GET /api/gmail/connect — starts the Google OAuth flow with MINIMUM scope
@@ -6,6 +8,9 @@ import { NextResponse } from "next/server";
  * Requires GMAIL_CLIENT_ID / GMAIL_CLIENT_SECRET.
  */
 export async function GET(request: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.redirect(new URL("/login", request.url));
   const clientId = process.env.GMAIL_CLIENT_ID;
   if (!clientId) {
     return NextResponse.json(
@@ -13,7 +18,8 @@ export async function GET(request: Request) {
       { status: 503 }
     );
   }
-  const origin = new URL(request.url).origin;
+  const origin = process.env.APP_ORIGIN || new URL(request.url).origin;
+  const state = randomBytes(32).toString("hex");
   const params = new URLSearchParams({
     client_id: clientId,
     redirect_uri: `${origin}/api/gmail/callback`,
@@ -25,8 +31,17 @@ export async function GET(request: Request) {
       "https://www.googleapis.com/auth/gmail.readonly",
       "https://www.googleapis.com/auth/gmail.labels",
     ].join(" "),
+    state,
   });
-  return NextResponse.redirect(
+  const response = NextResponse.redirect(
     `https://accounts.google.com/o/oauth2/v2/auth?${params}`
   );
+  response.cookies.set("gmail_oauth_state", state, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 600,
+    path: "/api/gmail/callback",
+  });
+  return response;
 }

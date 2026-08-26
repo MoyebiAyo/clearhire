@@ -33,13 +33,12 @@ export async function POST(
     return NextResponse.json({ startedAt: resolved.invite.started_at });
   }
 
-  const startedAt = new Date().toISOString();
-  const { error } = await createAdminClient()
-    .from("exam_invites")
-    .update({ status: "in_progress", started_at: startedAt })
-    .eq("id", resolved.invite.id);
+  const { data: started, error } = await createAdminClient().rpc("start_exam_invite", {
+    p_invite: resolved.invite.id,
+  });
   if (error) {
     return NextResponse.json({ error: "start_failed" }, { status: 500 });
   }
-  return NextResponse.json({ startedAt });
+  const row = Array.isArray(started) ? started[0] : started;
+  return NextResponse.json({ startedAt: row?.started_at ?? resolved.invite.started_at });
 }

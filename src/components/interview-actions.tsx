@@ -514,6 +514,16 @@ function ScorecardDialog({
   onDone: () => void;
 }) {
   const [rating, setRating] = useState(4);
+  const criteria = [
+    { id: "technical", label: "Role competence", weight: 40 },
+    { id: "communication", label: "Communication", weight: 30 },
+    { id: "problem_solving", label: "Problem solving", weight: 30 },
+  ];
+  const [criteriaScores, setCriteriaScores] = useState<Record<string, number>>({
+    technical: 4,
+    communication: 4,
+    problem_solving: 4,
+  });
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -524,7 +534,11 @@ function ScorecardDialog({
       const res = await fetch(`/api/interviews/${interview.id}/scorecard`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ interviewer_rating: rating, interviewer_notes: notes.trim() || null }),
+        body: JSON.stringify({
+          interviewer_rating: rating,
+          interviewer_notes: notes.trim() || null,
+          criteria_scores: criteriaScores,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -544,29 +558,26 @@ function ScorecardDialog({
   return (
     <Modal open onClose={onClose} title="Interview scorecard">
       <div className="space-y-4">
-        <div className="space-y-1.5">
-          <Label htmlFor="rating">Your rating (1–5)</Label>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5].map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setRating(n)}
-                aria-label={`${n} star${n === 1 ? "" : "s"}`}
-                aria-pressed={rating === n}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-semibold transition-colors ${
-                  rating === n
-                    ? "border-primary/40 bg-primary-soft text-primary"
-                    : "border-border bg-card text-muted-foreground hover:bg-muted"
-                }`}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
+        <div className="space-y-3">
+          <Label>Structured interview ratings</Label>
+          {criteria.map((criterion) => (
+            <div key={criterion.id} className="rounded-lg border border-border p-3">
+              <div className="mb-2 flex items-center justify-between text-sm">
+                <span className="font-medium">{criterion.label}</span>
+                <span className="text-xs text-muted-foreground">{criterion.weight}%</span>
+              </div>
+              <div className="flex gap-1">
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <button key={n} type="button" onClick={() => setCriteriaScores((current) => ({ ...current, [criterion.id]: n }))} aria-pressed={criteriaScores[criterion.id] === n} className={`min-h-9 flex-1 rounded-lg border text-sm font-semibold ${criteriaScores[criterion.id] === n ? "border-primary/40 bg-primary-soft text-primary" : "border-border text-muted-foreground hover:bg-muted"}`}>
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
           <p className="text-xs text-muted-foreground">
-            Stored next to the AI's blind score — comparing the two over time
-            is how you audit the rubric.
+            ClearHire calculates a weighted human rating and stores it beside
+            the AI's blind score for comparison.
           </p>
         </div>
         <div className="space-y-1.5">

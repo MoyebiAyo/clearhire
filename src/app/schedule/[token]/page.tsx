@@ -4,6 +4,8 @@ import { SchedulePicker } from "@/components/schedule-picker";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { one } from "@/lib/utils";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = { title: "Pick your interview time" };
 
 export default async function SchedulePage({
@@ -20,6 +22,7 @@ export default async function SchedulePage({
       "id, status, scheduled_time, offered_slots, interviewer, location_or_link, applications(candidates(name), jobs(title, recruiters(org_name)))"
     )
     .eq("schedule_token", token)
+    .eq("status", "scheduled")
     .maybeSingle();
 
   const interview = row as unknown as {

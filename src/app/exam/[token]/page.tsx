@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ExamRunner } from "@/components/exam-runner";
 import { examAvailability, resolveInvite, sweepTimedOut } from "@/lib/exam-state";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Public exam page — the unguessable token in the URL is the candidate's
  * capability (same model as /schedule/[token]).

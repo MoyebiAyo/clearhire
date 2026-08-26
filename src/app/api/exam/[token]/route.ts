@@ -35,5 +35,5 @@ export async function GET(
     violations: invite.violations,
     maxStrikes: 3,
     serverNow: new Date().toISOString(),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }

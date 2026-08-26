@@ -33,17 +33,14 @@ export async function POST(
     // keep default
   }
 
-  const violations = resolved.invite.violations + 1;
-  const forfeited = violations >= MAX_STRIKES;
-
-  const admin = createAdminClient();
-  await admin
-    .from("exam_invites")
-    .update({
-      violations,
-      ...(forfeited ? { status: "forfeited" } : {}),
-    })
-    .eq("id", resolved.invite.id);
+  const { data: updated, error } = await createAdminClient().rpc("record_exam_violation", {
+    p_invite: resolved.invite.id,
+    p_max: MAX_STRIKES,
+  });
+  if (error) return NextResponse.json({ error: "violation_failed" }, { status: 500 });
+  const row = Array.isArray(updated) ? updated[0] : updated;
+  const violations = Number(row?.violations ?? resolved.invite.violations);
+  const forfeited = row?.status === "forfeited";
 
   return NextResponse.json({ violations, maxStrikes: MAX_STRIKES, forfeited });
 }
