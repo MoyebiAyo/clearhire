@@ -55,11 +55,12 @@ interface ExamCard {
 }
 
 interface OperationalCard {
-  name: "exam_resend" | "stage_update" | "reveal";
+  name: "exam_resend" | "stage_update" | "reveal" | "email_send";
   count: number;
   candidates: { applicationId: string; rank: number; identity?: string | null }[];
   tone?: string;
   status?: string;
+  kind?: "offer" | "interview" | "exam" | "reminder";
 }
 
 type ActionCard = RejectCard | ExamCard | OperationalCard;
@@ -267,11 +268,16 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
         setMsgs((items) => items.map((item) => item.id === msg.id ? { ...item, actionDone: `Revealed ${card.count} candidate${card.count === 1 ? "" : "s"}.` } : item));
         router.refresh();
         return;
+      } else if (card.name === "email_send") {
+        path = `/api/jobs/${jobId}/applications/email`;
+        body = { applicationIds: card.candidates.map((candidate) => candidate.applicationId), kind: card.kind };
       }
       const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const result = await res.json();
       if (!res.ok) throw new Error(result.error ?? "The action could not be completed.");
-      const done = `Resent ${result.emailed ?? 0} exam invitation${result.emailed === 1 ? "" : "s"}${(result.failed?.length ?? 0) > 0 ? `; ${result.failed.length} failed` : ""}.`;
+      const done = card.name === "email_send"
+        ? `Sent ${result.sent ?? 0} ${card.kind} email${result.sent === 1 ? "" : "s"}${(result.failed?.length ?? 0) > 0 ? `; ${result.failed.length} failed` : ""}.`
+        : `Resent ${result.emailed ?? 0} exam invitation${result.emailed === 1 ? "" : "s"}${(result.failed?.length ?? 0) > 0 ? `; ${result.failed.length} failed` : ""}.`;
       setMsgs((items) => items.map((item) => item.id === msg.id ? { ...item, actionDone: done } : item));
       router.refresh();
     } catch (error) {
@@ -380,7 +386,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
                         onRun={(cfg) => runExam(m, m.action as ExamCard, cfg)}
                       />
                     )}
-                    {(m.action?.name === "exam_resend" || m.action?.name === "stage_update" || m.action?.name === "reveal") && !m.actionDone && (
+                    {(m.action?.name === "exam_resend" || m.action?.name === "stage_update" || m.action?.name === "reveal" || m.action?.name === "email_send") && !m.actionDone && (
                       <OperationalActionCard card={m.action as OperationalCard} busy={actionBusy === m.id} onRun={() => runOperational(m, m.action as OperationalCard)} />
                     )}
                     {m.actionDone && (
@@ -428,7 +434,7 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
 }
 
 function OperationalActionCard({ card, busy, onRun }: { card: OperationalCard; busy: boolean; onRun: () => void }) {
-  const label = card.name === "exam_resend" ? "Resend exam invitation" : card.name === "stage_update" ? `Move to ${card.status}` : "Reveal identity";
+  const label = card.name === "exam_resend" ? "Resend exam invitation" : card.name === "stage_update" ? `Move to ${card.status}` : card.name === "email_send" ? `Send ${card.kind} email` : "Reveal identity";
   return (
     <div className="space-y-3 rounded-xl border border-primary/20 bg-primary-soft/30 p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">

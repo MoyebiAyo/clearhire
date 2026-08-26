@@ -199,13 +199,14 @@ RULES:
 - When the recruiter tries a resend phrasing twice, never repeat the same non-action explanation. Propose the resend action on the second attempt if eligible targets exist.
 - "Move Candidate #3 to shortlisted", "shortlist Candidate #3", "move Candidate #7 to offer", or a single ambiguous "Next" handling request → action stage_update with targetRanks=[N], status accordingly.
 - "Reveal Candidate #2", "show Candidate #2" → action reveal with targetRanks=[2].
+- "Send the offer email to Candidate #6", "send the interview invite", "remind Candidate #2", or "send the exam link" → action email_send with kind="offer"|"interview"|"reminder"|"exam" and targetRanks=[N].
 - Accept plain-English intent such as "top candidate", "top 3", "the front-runner", "the strongest", and map them to the current rank-ordered shortlist.
 - "Who has an exam invitation?" or "Who is waiting for an interview?" → answer from the data, with no action.
 - "What should I do next?" → give a prioritized recommendation from status, score, gaps, interview, exam, and duplicate data.
 - You can answer analytical questions about rankings, score breakdowns, hard gaps, skills, experience, certifications, tools, duplicate flags, pipeline status, interview status, and exam status directly from the context.
 - If the recruiter asks "what can you do?" → summarize the supported action catalog in 3-6 short bullets without inventing new capabilities.
 - If the request is interview scheduling, reminders, or email resends you cannot directly execute, explain the manual card/dialog that does it (for example: open the candidate card → Schedule interview → pick slots → Send).
-- Safe action catalog: reject with email, create an exam, resend an existing exam invitation, move candidates between pipeline stages, reveal identity, and scan CV evidence.
+- Safe action catalog: reject with email, create an exam, send or resend offer/interview/exam/reminder emails, move candidates between pipeline stages, reveal identity, and scan CV evidence.
 
 Actions (choose at most one, or null):
 {"name":"reject_preview","args":{"maxTotal":number?,"minTotal":number?,"onlyHardGaps":boolean?,"tone":"formal"|"casual"|"technical"}}
@@ -214,6 +215,7 @@ Actions (choose at most one, or null):
 {"name":"exam_resend","args":{"targetRanks":number[],"tone":"formal"|"casual"|"technical"}}
 {"name":"stage_update","args":{"targetRanks":number[],"status":"applied"|"screened"|"shortlisted"|"interview_scheduled"|"interviewed"|"offer"|"rejected"}}
 {"name":"reveal","args":{"targetRanks":number[]}}
+{"name":"email_send","args":{"kind":"offer"|"interview"|"exam"|"reminder","targetRanks":number[]}}
 
 Respond with JSON only: {"answer": string (what you say to the recruiter; if proposing an action, briefly say what you found and that a confirmation card follows), "action": <action object or null>}`,
   });
@@ -325,13 +327,16 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
         action: null,
       });
     }
-  } else if (action && (action.name === "exam_resend" || action.name === "stage_update" || action.name === "reveal")) {
+  } else if (action && (action.name === "exam_resend" || action.name === "stage_update" || action.name === "reveal" || action.name === "email_send")) {
     const args = action.args ?? {};
     const ranks = Array.isArray(args.targetRanks)
       ? args.targetRanks.filter((rank): rank is number => typeof rank === "number" && Number.isInteger(rank))
       : [];
     const selected = candidates.filter((candidate) => ranks.includes(candidate.rank));
-    if (action.name === "exam_resend") {
+    if (action.name === "email_send") {
+      const kind = ["offer", "interview", "exam", "reminder"].includes(String(args.kind)) ? String(args.kind) : "reminder";
+      resolved = { name: "email_send", kind, count: selected.length, candidates: selected.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank, identity: candidate.identity })) };
+    } else if (action.name === "exam_resend") {
       const eligible = selected.filter((candidate) => candidate.exam?.status === "invited" || candidate.exam?.status === "in_progress");
       if (eligible.length === 0) {
         const hint =
