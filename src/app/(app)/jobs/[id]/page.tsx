@@ -256,6 +256,16 @@ export default async function JobDetailPage({
     { label: "Tools", value: weights.tools },
   ];
 
+  // Effective scoring criteria: authored override first, then the AI's
+  // derivation cached at the first scoring run.
+  const authoredReqs = Array.isArray(job.requirements)
+    ? (job.requirements as { requirement: string; type: string }[])
+    : [];
+  const derivedReqs = Array.isArray(job.requirements_cache)
+    ? (job.requirements_cache as { requirement: string; type: string }[])
+    : [];
+  const effectiveReqs = authoredReqs.length > 0 ? authoredReqs : derivedReqs;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
@@ -291,6 +301,10 @@ export default async function JobDetailPage({
                 weight_certifications: weights.certifications,
                 weight_tools: weights.tools,
               }}
+              initialRequirements={authoredReqs.map((r) => ({
+                requirement: r.requirement,
+                type: r.type === "nice-to-have" ? ("nice-to-have" as const) : ("hard" as const),
+              }))}
             />
           </div>
         </div>
@@ -329,15 +343,36 @@ export default async function JobDetailPage({
               {job.jd_text}
             </p>
             </details>
-            {Array.isArray(job.requirements) && job.requirements.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {job.requirements.map((requirement: { requirement: string; type: string }) => (
-                  <Badge key={`${requirement.type}-${requirement.requirement}`} variant={requirement.type === "hard" ? "destructive" : "secondary"}>
-                    {requirement.type === "hard" ? "Mandatory" : "Preferred"}: {requirement.requirement}
-                  </Badge>
-                ))}
-              </div>
+          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
+            <p className="text-sm font-medium">Scoring criteria</p>
+            {effectiveReqs.length > 0 ? (
+              <>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {authoredReqs.length > 0
+                    ? "Set by you — used as-is for every CV on this job."
+                    : "Derived from your job description by the AI — edit any time via “Edit scoring setup”."}
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {effectiveReqs.map((requirement, i) => (
+                    <li
+                      key={`${requirement.type}-${i}`}
+                      title={requirement.type === "hard" ? "Mandatory — missing it is a hard gap." : "Preferred — missing it is a minor gap."}
+                    >
+                      <Badge variant={requirement.type === "hard" ? "destructive" : "secondary"}>
+                        {requirement.type === "hard" ? "Mandatory" : "Preferred"}: {requirement.requirement}
+                      </Badge>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                These are derived automatically from your job description at
+                the first scoring run — then you can review and pin your own
+                via &ldquo;Edit scoring setup&rdquo; above.
+              </p>
             )}
+          </div>
         </CardContent>
       </Card>
 

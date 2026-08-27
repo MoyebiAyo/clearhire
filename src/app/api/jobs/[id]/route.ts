@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
-import { jobStatusSchema, weightsSchema } from "@/lib/validation";
+import { jobStatusSchema, requirementsSchema, weightsSchema } from "@/lib/validation";
 
 export async function GET(
   _request: Request,
@@ -29,7 +29,7 @@ export async function GET(
 }
 
 /**
- * PATCH /api/jobs/[id] — three modes:
+ * PATCH /api/jobs/[id] — modes (combinable except status):
  *
  * 1. { status }                      → open/close the job.
  * 2. { weight_* } (+ optional jd_text unchanged)
@@ -39,6 +39,9 @@ export async function GET(
  * 3. { jd_text } changed              → save the new JD, drop the cached
  *      requirements AND the job's scores rows (warned in the UI), so the
  *      recruiter re-runs "Score blind" under the new requirements.
+ * 4. { requirements }                 → replace the authored scoring
+ *      criteria (empty array = back to AI derivation from the JD). A change
+ *      clears existing scores, same as a JD change.
  */
 export async function PATCH(
   request: Request,
@@ -88,7 +91,7 @@ export async function PATCH(
 
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, jd_text, weight_skills, weight_experience, weight_certifications, weight_tools")
+    .select("id, jd_text, requirements, weight_skills, weight_experience, weight_certifications, weight_tools")
     .eq("id", id)
     .maybeSingle();
   if (!job) {
@@ -106,7 +109,29 @@ export async function PATCH(
     parsed.data.weight_certifications !== Number(job.weight_certifications) ||
     parsed.data.weight_tools !== Number(job.weight_tools);
 
-  if (!jdChanged && !weightsChanged) {
+  // Optional scoring-criteria override (rides along with the weights).
+  let cleanedReqs: { requirement: string; type: "hard" | "nice-to-have" }[] | null = null;
+  let requirementsChanged = false;
+  if (Array.isArray(json.requirements)) {
+    const filtered = (json.requirements as { requirement?: unknown; type?: unknown }[])
+      .filter((r) => typeof r?.requirement === "string" && r.requirement.trim().length >= 2)
+      .map((r) => ({
+        requirement: String(r.requirement).trim(),
+        type: r.type === "nice-to-have" ? ("nice-to-have" as const) : ("hard" as const),
+      }));
+    const parsedReqs = requirementsSchema.safeParse(filtered);
+    if (!parsedReqs.success) {
+      return NextResponse.json(
+        { error: "Invalid scoring criteria — keep each between 2 and 240 characters, max 30." },
+        { status: 400 }
+      );
+    }
+    cleanedReqs = parsedReqs.data;
+    const existing = Array.isArray(job.requirements) ? (job.requirements as typeof cleanedReqs) : [];
+    requirementsChanged = JSON.stringify(existing) !== JSON.stringify(cleanedReqs);
+  }
+
+  if (!jdChanged && !weightsChanged && !requirementsChanged) {
     return NextResponse.json({ job, changed: false });
   }
 
@@ -114,6 +139,9 @@ export async function PATCH(
   if (jdChanged) {
     update.jd_text = newJd;
     update.requirements_cache = null;
+  }
+  if (requirementsChanged) {
+    update.requirements = cleanedReqs;
   }
 
   const { error: updateError } = await supabase
@@ -127,8 +155,8 @@ export async function PATCH(
   let recomputed = 0;
   let scoresCleared = 0;
 
-  if (jdChanged) {
-    // Requirements changed → existing scores no longer apply. Remove them so
+  if (jdChanged || requirementsChanged) {
+    // The yardstick changed → existing scores no longer apply. Remove them so
     // "Score blind" re-runs cleanly (idempotency: only unscored apps run).
     const { data: apps } = await supabase
       .from("applications")
@@ -173,5 +201,12 @@ export async function PATCH(
     }
   }
 
-  return NextResponse.json({ job: { id }, changed: true, recomputed, scoresCleared, jdChanged });
+  return NextResponse.json({
+    job: { id },
+    changed: true,
+    recomputed,
+    scoresCleared,
+    jdChanged,
+    requirementsChanged,
+  });
 }

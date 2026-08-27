@@ -36,6 +36,11 @@ export const jobRequirementSchema = z.object({
   type: z.enum(["hard", "nice-to-have"]),
 });
 
+export type Requirement = z.infer<typeof jobRequirementSchema>;
+
+/** Requirements list shared by job creation, the PATCH editor, and scoring. */
+export const requirementsSchema = z.array(jobRequirementSchema).max(30);
+
 export const jobSchema = z
   .object({
     title: z.string().trim().min(3, "Give the job a title (3+ characters)"),
@@ -47,7 +52,7 @@ export const jobSchema = z
     weight_experience: weight,
     weight_certifications: weight,
     weight_tools: weight,
-    requirements: z.array(jobRequirementSchema).max(30).default([]),
+    requirements: requirementsSchema.default([]),
   })
   .refine(
     (v) =>
