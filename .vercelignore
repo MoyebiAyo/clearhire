@@ -1,0 +1,3 @@
+# The Remotion demo-film project builds with its own tooling and isn't part
+# of the Next.js app — keep it (and its media) out of Vercel uploads.
+remotion
