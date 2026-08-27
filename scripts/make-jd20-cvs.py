@@ -5,7 +5,7 @@ Deliberate score spread so every recruiter flow has something to do:
   - 5 good     (most core skills, 5-6 yrs)
   - 4 mid      (real gaps: single-stack or short experience)
   - 5 weak     (junior / missing core skills -> natural "reject below 60" set)
-  - 03 uses the recruiter's own address (me@ayodev.tech) so exam invites and
+  - 07 uses the recruiter's own address (me@ayodev.tech) so exam invites and
     rejection emails can be received personally.
 
 Usage:  python scripts/make-jd20-cvs.py
@@ -48,9 +48,9 @@ We value clear written communication, pragmatic trade-offs, and engineers who le
 
 # (filename, format, name, email, body)
 CVS = [
-    ("01-chiamaka-eze-strong-lead", "pdf", "Chiamaka Eze", "chiamaka.eze.dev@gmail.com",
+    ("01-chiamaka-eze-strong-lead", "pdf", "Chiamaka Eze", "moyebiayodelesegun@gmail.com",
      """Chiamaka Eze
-chiamaka.eze.dev@gmail.com | +234 803 555 0111 | Lagos, Nigeria
+moyebiayodelesegun@gmail.com | +234 803 555 0111 | Lagos, Nigeria
 
 SUMMARY
 Tech Lead and full-stack engineer with 8 years of experience building SaaS products with React, TypeScript and Node.js. Led a team of six engineers shipping a platform serving 30k daily active users.
@@ -75,9 +75,9 @@ AWS Certified Solutions Architect - Associate (2023).
 
 TOOLS
 Docker, AWS (ECS, RDS, S3, CloudWatch), GitHub Actions, Grafana, Figma (handoff)."""),
-    ("02-tunde-bakare-staff", "pdf", "Tunde Bakare", "tunde.bakare.eng@gmail.com",
+    ("02-tunde-bakare-staff", "pdf", "Tunde Bakare", "moyebimasboy@gmail.com",
      """Tunde Bakare
-tunde.bakare.eng@gmail.com | +234 802 555 0122 | Abuja, Nigeria
+moyebimasboy@gmail.com | +234 802 555 0122 | Abuja, Nigeria
 
 SUMMARY
 Staff engineer, 9 years, mostly product full-stack: React/TypeScript on the front, Node.js and PostgreSQL on the back. Ran the engineering guild for platform reliability and acted as engineering manager for a quarter.
@@ -101,9 +101,9 @@ Certified Kubernetes Administrator (2022); AWS Certified Developer - Associate (
 
 TOOLS
 Docker, Kubernetes, Terraform, AWS, GitHub Actions, Datadog, Redis."""),
-    ("03-ayo-segun-own-address", "pdf", "Ayodele Segun", "me@ayodev.tech",
+    ("03-ayo-segun-strong", "pdf", "Ayodele Segun", "ayodelemoyebi@outlook.com",
      """Ayodele Segun
-me@ayodev.tech | +234 809 555 0133 | Lagos, Nigeria
+ayodelemoyebi@outlook.com | +234 809 555 0133 | Lagos, Nigeria
 
 SUMMARY
 Full-stack engineer with 6 years of experience shipping product features with React, TypeScript and Node.js. Owned the customer portal of a logistics platform end-to-end and mentored two junior engineers to promotion.
@@ -128,9 +128,9 @@ AWS Certified Developer - Associate (2024).
 
 TOOLS
 Docker, AWS, GitHub Actions, Prisma, PostgreSQL, Vercel."""),
-    ("04-fatima-yusuf-senior", "pdf", "Fatima Yusuf", "fatima.yusuf.dev@gmail.com",
+    ("04-fatima-yusuf-senior", "pdf", "Fatima Yusuf", "ayodelecreatives@gmail.com",
      """Fatima Yusuf
-fatima.yusuf.dev@gmail.com | +234 805 555 0144 | Kano, Nigeria
+ayodelecreatives@gmail.com | +234 805 555 0144 | Kano, Nigeria
 
 SUMMARY
 Senior product engineer, 7 years. Strongest in React/TypeScript front ends and Node.js APIs on PostgreSQL. Ships fast without breaking tests; writes the docs nobody wants to write.
@@ -154,9 +154,9 @@ AWS Certified Solutions Architect - Associate (2023).
 
 TOOLS
 Docker, AWS, GitHub Actions, Storybook, Lighthouse CI."""),
-    ("05-ibrahim-sule-testing", "pdf", "Ibrahim Sule", "ibrahim.sule.dev@gmail.com",
+    ("05-ibrahim-sule-testing", "pdf", "Ibrahim Sule", "mousetechng@gmail.com",
      """Ibrahim Sule
-ibrahim.sule.dev@gmail.com | +234 807 555 0155 | Kaduna, Nigeria
+mousetechng@gmail.com | +234 807 555 0155 | Kaduna, Nigeria
 
 SUMMARY
 Full-stack engineer, 6 years, quality-obsessed. Node.js and PostgreSQL backend specialist who is also productive in React. Believes a feature is not done until the tests and dashboards say so.
@@ -180,9 +180,9 @@ None yet - AWS Developer Associate scheduled.
 
 TOOLS
 Docker, AWS, GitHub Actions, k6, pgAdmin."""),
-    ("06-adaeze-okafor-lead", "pdf", "Adaeze Okafor", "adaeze.okafor.dev@gmail.com",
+    ("06-adaeze-okafor-lead", "pdf", "Adaeze Okafor", "mousesteamng@gmail.com",
      """Adaeze Okafor
-adaeze.okafor.dev@gmail.com | +234 806 555 0166 | Enugu, Nigeria
+mousesteamng@gmail.com | +234 806 555 0166 | Enugu, Nigeria
 
 SUMMARY
 Engineering lead with 7 years across React front ends and Node.js platforms. Tech Lead for two product squads; comfortable owning roadmaps, reviews and production.
@@ -206,9 +206,9 @@ AWS Certified Developer - Associate (2022).
 
 TOOLS
 Docker, AWS, GitHub Actions, Jira, Figma."""),
-    ("07-david-chen-good", "docx", "David Chen", "david.chen.dev@gmail.com",
+    ("07-david-chen-good", "docx", "David Chen", "me@ayodev.tech",
      """David Chen
-david.chen.dev@gmail.com | Berlin, Germany
+me@ayodev.tech | Berlin, Germany
 
 SUMMARY
 Product full-stack engineer, 5 years, React and Node.js. Enjoys owning a slice of the product from database migration to deployed UI.
@@ -228,9 +228,9 @@ BSc Media Informatics, TU Berlin, 2018.
 
 TOOLS
 Docker, AWS, GitHub Actions, PostgreSQL."""),
-    ("08-blessing-umeh-good", "pdf", "Blessing Umeh", "blessing.umeh.dev@gmail.com",
+    ("08-blessing-umeh-good", "pdf", "Blessing Umeh", "hello@mousetech.app",
      """Blessing Umeh
-blessing.umeh.dev@gmail.com | +234 812 555 0188 | Owerri, Nigeria
+hello@mousetech.app | +234 812 555 0188 | Owerri, Nigeria
 
 SUMMARY
 Front-end-leaning full-stack engineer, 5 years. Deep React/TypeScript, comfortable Node/Express, light AWS. Looking to grow backend depth on a strong team.
@@ -250,9 +250,9 @@ BSc Computer Science, Federal University of Technology Owerri, 2018.
 
 TOOLS
 Docker (dev only), GitHub, Vercel, AWS console."""),
-    ("09-ngozi-chukwu-backend", "pdf", "Ngozi Chukwu", "ngozi.chukwu.eng@gmail.com",
+    ("09-ngozi-chukwu-backend", "pdf", "Ngozi Chukwu", "ayo@mousetech.app",
      """Ngozi Chukwu
-ngozi.chukwu.eng@gmail.com | +234 803 555 0199 | Enugu, Nigeria
+ayo@mousetech.app | +234 803 555 0199 | Enugu, Nigeria
 
 SUMMARY
 Backend-focused engineer, 6 years, Node.js and PostgreSQL. React is functional but not my strength. Strong on data modelling, queues and reliability.
@@ -272,9 +272,9 @@ BSc Statistics, University of Nigeria Nsukka, 2016.
 
 TOOLS
 Docker, AWS, GitHub Actions, Redis, pgBouncer."""),
-    ("10-segun-adeyemi-good", "pdf", "Segun Adeyemi", "segun.adeyemi.dev@gmail.com",
+    ("10-segun-adeyemi-good", "pdf", "Segun Adeyemi", "ayodelemoyebi@theeventpass.com",
      """Segun Adeyemi
-segun.adeyemi.dev@gmail.com | +234 808 555 0200 | Abeokuta, Nigeria
+ayodelemoyebi@theeventpass.com | +234 808 555 0200 | Abeokuta, Nigeria
 
 SUMMARY
 Full-stack engineer, 5 years, mostly React + Node for SME products. Comfortable taking a ticket from design review to production deploy.
