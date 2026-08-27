@@ -43,26 +43,71 @@ export function parseEmail(text: string): string | null {
   return match ? match[0].toLowerCase() : null;
 }
 
-/**
- * Best-effort name guess: the first short line near the top of the CV that
- * looks like a human name (no digits, no @, title-cased-ish). Null if nothing
- * plausible is found — the email remains the source of truth.
- */
+const CV_HEADINGS = new Set([
+  "about",
+  "certifications",
+  "contact",
+  "education",
+  "experience",
+  "interests",
+  "profile",
+  "projects",
+  "references",
+  "skills",
+  "summary",
+  "tools",
+]);
+
+const ROLE_WORDS = new Set([
+  "administrator",
+  "analyst",
+  "architect",
+  "consultant",
+  "coordinator",
+  "developer",
+  "director",
+  "engineer",
+  "founder",
+  "manager",
+  "officer",
+  "recruiter",
+  "specialist",
+  "student",
+  "teacher",
+]);
+
+/** Best-effort name guess from the CV header, not an AI extraction field. */
 export function guessName(text: string): string | null {
   const lines = text
     .split(/\r?\n/)
     .map((l) => l.trim())
     .filter(Boolean)
-    .slice(0, 12);
+    .slice(0, 20);
 
   for (const line of lines) {
     if (line.length < 2 || line.length > 60) continue;
     if (line.includes("@") || /\d/.test(line)) continue;
-    // 1–4 words, mostly letters/apostrophes/hyphens/periods
+    if (/[|,:;()/\\]/.test(line)) continue;
+
+    const normalized = line.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+    if (CV_HEADINGS.has(normalized)) continue;
+
     const words = line.split(/\s+/);
-    if (words.length < 1 || words.length > 4) continue;
-    const nameLike = words.every((w) => /^[A-Z][a-zA-Z'.-]*$/.test(w));
-    if (nameLike) return line;
+    if (words.length < 2 || words.length > 4) continue;
+
+    const lowerWords = words.map((word) => word.toLowerCase().replace(/[^a-z]/g, ""));
+    if (lowerWords.some((word) => ROLE_WORDS.has(word))) continue;
+
+    const nameLike = words.every((word) => /^[A-Z][a-zA-Z'.-]*$/.test(word));
+    if (nameLike) return line.replace(/\s+/g, " ");
   }
   return null;
+}
+
+export function shouldReplaceCandidateName(current: string | null, text: string): boolean {
+  if (!current) return true;
+  const normalized = current.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+  if (CV_HEADINGS.has(normalized)) return true;
+  const words = normalized.split(/\s+/).filter(Boolean);
+  return words.some((word) => ROLE_WORDS.has(word)) || !text.toLowerCase().includes(current.toLowerCase());
 }

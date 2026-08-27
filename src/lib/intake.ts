@@ -71,7 +71,7 @@ export async function ingestCv(input: IngestInput): Promise<IngestResult> {
       contentType: input.contentType,
       text,
       email,
-      name: input.candidateName ?? guessName(text),
+      name: guessName(text) ?? input.candidateName ?? null,
       source: input.source,
     });
     return result;

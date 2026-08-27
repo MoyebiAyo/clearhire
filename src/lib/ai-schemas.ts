@@ -8,6 +8,7 @@ import { z } from "zod";
 const score = z.coerce.number().min(0).max(100);
 
 const rawExtraction = z.object({
+  candidate_name: z.coerce.string().nullish(),
   skills: z.array(z.coerce.string()).default([]),
   experience_years: z.coerce.number().min(0).max(60),
   education: z
@@ -31,6 +32,7 @@ export interface EducationEntry {
 }
 
 export interface ExtractionResult {
+  candidate_name: string | null;
   skills: string[];
   experience_years: number;
   education: EducationEntry[];
@@ -41,6 +43,7 @@ export interface ExtractionResult {
 export function parseExtraction(raw: unknown): ExtractionResult {
   const v = rawExtraction.parse(raw);
   return {
+    candidate_name: v.candidate_name?.trim() || null,
     skills: v.skills.map((s) => s.trim()).filter(Boolean),
     experience_years: v.experience_years,
     education: v.education.map((e) =>

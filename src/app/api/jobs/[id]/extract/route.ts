@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { aiUserMessage, chatJSON, debugAI, mapWithConcurrency } from "@/lib/ai";
 import { parseExtraction } from "@/lib/ai-schemas";
+import { shouldReplaceCandidateName } from "@/lib/cv/text";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
 
@@ -57,13 +58,13 @@ export async function POST(
   const { data: raw } = await supabase
     .from("applications")
     .select(
-      "id, candidates(email), cv_extractions(id, raw_text, skills)"
+      "id, candidates(id, email, name), cv_extractions(id, raw_text, skills)"
     )
     .eq("job_id", jobId);
 
   interface PendingRow {
     id: string;
-    candidates: { email: string }[] | null;
+    candidates: { id: string; email: string; name: string | null }[] | null;
     cv_extractions:
       | { id: string; raw_text: string | null; skills: string[] | null }[]
       | null;
@@ -77,7 +78,7 @@ export async function POST(
     )
     .map((row) => ({
       applicationId: row.id,
-      email: one<{ email: string }>(row.candidates)?.email ?? null,
+      candidate: one<{ id: string; email: string; name: string | null }>(row.candidates),
       extractionId: row.cv_extractions![0].id,
       rawText: row.cv_extractions![0].raw_text!.slice(0, MAX_RAW_CHARS),
     }));
@@ -94,7 +95,8 @@ export async function POST(
   const results = await mapWithConcurrency(batch, CONCURRENCY, async (item) => {
     try {
       // Spec prompt, verbatim (Part 6) — [raw_text] substituted.
-      const prompt = `Extract the following from this CV text as strict JSON only, no prose:
+      const prompt = `Extract the following from this CV text as strict JSON only, no prose.
+candidate_name (the person's full name exactly as shown in the CV; null if not confidently identifiable),
 skills (array), experience_years (number),
 education (array of {degree, institution}),
 certifications (array), tools (array).
@@ -119,9 +121,21 @@ CV text: ${item.rawText}`;
 
       if (error) throw new Error(error.message);
 
+      if (
+        parsed.candidate_name &&
+        item.candidate?.id &&
+        shouldReplaceCandidateName(item.candidate.name, item.rawText)
+      ) {
+        const { error: candidateError } = await supabase
+          .from("candidates")
+          .update({ name: parsed.candidate_name })
+          .eq("id", item.candidate.id);
+        if (candidateError) throw new Error(candidateError.message);
+      }
+
       return {
         application_id: item.applicationId,
-        email: item.email,
+        email: item.candidate?.email ?? null,
         status: "extracted" as const,
       };
     } catch (err) {
@@ -137,7 +151,7 @@ CV text: ${item.rawText}`;
         .eq("id", item.extractionId);
       return {
         application_id: item.applicationId,
-        email: item.email,
+        email: item.candidate?.email ?? null,
         status: "failed" as const,
         message: aiUserMessage(err),
       };
