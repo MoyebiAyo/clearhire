@@ -265,6 +265,8 @@ export default async function JobDetailPage({
     ? (job.requirements_cache as { requirement: string; type: string }[])
     : [];
   const effectiveReqs = authoredReqs.length > 0 ? authoredReqs : derivedReqs;
+  const mandatoryReqs = effectiveReqs.filter((r) => r.type === "hard");
+  const preferredReqs = effectiveReqs.filter((r) => r.type !== "hard");
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -321,60 +323,88 @@ export default async function JobDetailPage({
         ))}
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Scale className="size-4 text-primary" aria-hidden />
-            How this job is scored
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
+      <details className="group rounded-xl border border-border bg-card shadow-sm">
+        <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-4 py-3 marker:content-none sm:px-5">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-sm font-medium">
+              <Scale className="size-4 text-primary" aria-hidden />
+              How this job is scored
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Blind scoring ·{" "}
+              {effectiveReqs.length > 0
+                ? `${mandatoryReqs.length} mandatory + ${preferredReqs.length} preferred criteria · `
+                : ""}
+              weights {weights.skills}/{weights.experience}/{weights.certifications}/{weights.tools}
+            </p>
+          </div>
+          <span className="text-xs font-medium text-primary group-open:hidden">View details</span>
+          <span className="hidden text-xs font-medium text-primary group-open:inline">Hide</span>
+        </summary>
+        <div className="space-y-4 border-t border-border px-4 py-4 sm:px-5">
           <p className="text-sm text-muted-foreground">
             Every CV is parsed into structured data (skills, years of
             experience, certifications, tools) and scored 0–100 per criterion
             against this rubric. Scoring is <strong>blind</strong> — names,
             schools, and photos are stripped before the AI sees anything.
           </p>
-          <details className="group rounded-lg border border-border">
+
+          {effectiveReqs.length > 0 ? (
+            <div>
+              <p className="text-xs text-muted-foreground">
+                {authoredReqs.length > 0
+                  ? "Criteria set by you — used as-is for every CV on this job."
+                  : "Criteria derived from your job description by the AI — edit any time via “Edit scoring setup”."}
+              </p>
+              <div className="mt-3 grid gap-5 sm:grid-cols-2">
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-semibold">
+                    <span className="size-1.5 rounded-full bg-destructive" aria-hidden />
+                    Mandatory ({mandatoryReqs.length})
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {mandatoryReqs.map((r, i) => (
+                      <li key={`m-${i}`} className="flex gap-2 text-sm leading-snug">
+                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive/70" aria-hidden />
+                        {r.requirement}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-semibold">
+                    <span className="size-1.5 rounded-full bg-muted-foreground/50" aria-hidden />
+                    Preferred ({preferredReqs.length})
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {preferredReqs.map((r, i) => (
+                      <li key={`p-${i}`} className="flex gap-2 text-sm leading-snug text-muted-foreground">
+                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden />
+                        {r.requirement}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Scoring criteria are derived automatically from your job
+              description at the first scoring run — then you can review and
+              pin your own via &ldquo;Edit scoring setup&rdquo; above.
+            </p>
+          )}
+
+          <details className="group/jd rounded-lg border border-border">
             <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-primary marker:content-none hover:bg-muted">
               Show job description
             </summary>
             <p className="whitespace-pre-wrap break-words border-t border-border px-4 py-3 text-sm leading-relaxed text-foreground">
               {job.jd_text}
             </p>
-            </details>
-          <div className="rounded-lg border border-border bg-muted/30 px-4 py-3">
-            <p className="text-sm font-medium">Scoring criteria</p>
-            {effectiveReqs.length > 0 ? (
-              <>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {authoredReqs.length > 0
-                    ? "Set by you — used as-is for every CV on this job."
-                    : "Derived from your job description by the AI — edit any time via “Edit scoring setup”."}
-                </p>
-                <ul className="mt-2 flex flex-wrap gap-2">
-                  {effectiveReqs.map((requirement, i) => (
-                    <li
-                      key={`${requirement.type}-${i}`}
-                      title={requirement.type === "hard" ? "Mandatory — missing it is a hard gap." : "Preferred — missing it is a minor gap."}
-                    >
-                      <Badge variant={requirement.type === "hard" ? "destructive" : "secondary"}>
-                        {requirement.type === "hard" ? "Mandatory" : "Preferred"}: {requirement.requirement}
-                      </Badge>
-                    </li>
-                  ))}
-                </ul>
-              </>
-            ) : (
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                These are derived automatically from your job description at
-                the first scoring run — then you can review and pin your own
-                via &ldquo;Edit scoring setup&rdquo; above.
-              </p>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+          </details>
+        </div>
+      </details>
 
       <CvUploader
         jobId={job.id}
