@@ -84,11 +84,22 @@ export async function logEmail(
   await admin.from("email_log").insert(entry);
 }
 
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
+}
+
 /**
  * Batch send via Resend's /emails/batch endpoint, chunked at 10 per call
- * with a short pause between chunks — comfortably inside the free tier's
- * ~2 emails/sec without tripping rate limits. Returns one EmailResult per
- * input, in order; a failed chunk marks only its own items as failed.
+ * with a short pause between chunks — comfortably inside the rate limits
+ * (10 req/s per team; each batch call counts as one request). Returns one
+ * EmailResult per input, in order; a failed chunk marks only its own items
+ * as failed.
+ *
+ * Transient failures (429 rate limit, 5xx, network) back off and retry up
+ * to 3 attempts per chunk, honoring Retry-After (capped at 8s per wait;
+ * windows longer than 30s — e.g. an exhausted daily quota — fail fast
+ * since waiting can't help within this request). A retry budget keeps the
+ * whole call inside the caller's 60s serverless window.
  */
 export async function sendEmailBatch(
   messages: { to: string; subject: string; text: string }[]
@@ -99,59 +110,87 @@ export async function sendEmailBatch(
   }
   const results: EmailResult[] = new Array(messages.length).fill(null);
   const CHUNK = 10;
+  const retryDeadline = Date.now() + 35_000;
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   for (let i = 0; i < messages.length; i += CHUNK) {
     const slice = messages.slice(i, i + CHUNK);
-    try {
-      const res = await fetch(`${RESEND_ENDPOINT}/batch`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          slice.map((m) => ({
-            from: emailFrom(),
-            to: [m.to],
-            subject: m.subject,
-            text: m.text,
-          }))
-        ),
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        // Resend rejects the entire batch if any recipient is invalid (e.g. example.com).
-        // Fall back to individual sends so valid addresses still get delivered.
-        if (res.status === 422 || res.status === 400) {
-          for (let j = 0; j < slice.length; j++) {
-            const single = slice[j];
-            const r = await sendEmail(single);
-            results[i + j] = r;
-            if (j < slice.length - 1) await new Promise((rr) => setTimeout(rr, 350));
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      let lastError = "unknown";
+      let waitMs = 1500 * 2 ** (attempt - 1);
+      let succeeded = false;
+      let retryable = false;
+
+      try {
+        const res = await fetch(`${RESEND_ENDPOINT}/batch`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(
+            slice.map((m) => ({
+              from: emailFrom(),
+              to: [m.to],
+              subject: m.subject,
+              text: m.text,
+            }))
+          ),
+          signal: AbortSignal.timeout(20_000),
+        });
+        if (!res.ok) {
+          const body = await res.text().catch(() => "");
+          lastError = `resend-${res.status}: ${body.slice(0, 120)}`;
+          if (res.status === 422 || res.status === 400) {
+            // Resend rejects the entire batch if any recipient is invalid
+            // (e.g. example.com). Fall back to individual sends so valid
+            // addresses still get delivered.
+            for (let j = 0; j < slice.length; j++) {
+              results[i + j] = await sendEmail(slice[j]);
+              if (j < slice.length - 1) await sleep(350);
+            }
+            succeeded = true;
+          } else if (isTransientStatus(res.status)) {
+            const retryAfter = Number(res.headers.get("retry-after")) || 0;
+            if (retryAfter > 30) {
+              retryable = false; // long window (e.g. daily quota) — fail fast
+            } else {
+              waitMs = retryAfter > 0 ? Math.min(retryAfter * 1000, 8000) : waitMs;
+              retryable = true;
+            }
           }
         } else {
-          const err = `resend-${res.status}: ${body.slice(0, 120)}`;
-          slice.forEach((_, j) => (results[i + j] = { ok: false, error: err }));
+          // Resend returns { data: [{ id }, ...] } for batch sends. Accept the
+          // bare array too so provider response changes fail closed per item.
+          const payload = (await res.json()) as
+            | { data?: { id?: string }[] }
+            | { id?: string }[];
+          const data = batchEmailIds(payload);
+          slice.forEach((_, j) => {
+            const sent = data?.[j];
+            results[i + j] = sent?.id
+              ? { ok: true, providerMessageId: sent.id }
+              : { ok: false, error: "no-provider-id" };
+          });
+          succeeded = true;
         }
-      } else {
-        // Resend returns { data: [{ id }, ...] } for batch sends. Accept the
-        // bare array too so provider response changes fail closed per item.
-        const payload = (await res.json()) as
-          | { data?: { id?: string }[] }
-          | { id?: string }[];
-        const data = batchEmailIds(payload);
-        slice.forEach((_, j) => {
-          const sent = data?.[j];
-          results[i + j] = sent?.id
-            ? { ok: true, providerMessageId: sent.id }
-            : { ok: false, error: "no-provider-id" };
-        });
+      } catch {
+        lastError = "network";
+        retryable = true;
       }
-    } catch {
-      slice.forEach((_, j) => (results[i + j] = { ok: false, error: "network" }));
+
+      if (succeeded) break;
+      if (retryable && attempt < 3 && Date.now() < retryDeadline) {
+        await sleep(waitMs);
+        continue;
+      }
+      slice.forEach((_, j) => (results[i + j] = { ok: false, error: lastError }));
+      break;
     }
+
     if (i + CHUNK < messages.length) {
-      await new Promise((r) => setTimeout(r, 500));
+      await sleep(500);
     }
   }
   return results;
