@@ -58,42 +58,65 @@ export async function POST(request: Request) {
   const payload = JSON.stringify(body);
   let lastStatus = 502;
   for (const key of keyChain) {
-    let groqRes: Response;
-    try {
-      groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${key}`,
-        },
-        body: payload,
-        // If Deepgram cancels the think call (barge-in), release the Groq
-        // request too — otherwise every interruption leaves a phantom call
-        // burning the rate limit for up to 45s.
-        signal: AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]),
-      });
-    } catch (err) {
-      console.error(`[voice-llm] groq network failure: ${String(err).slice(0, 160)}`);
-      lastStatus = 504;
-      continue;
-    }
+    // Two tries per key: Groq's token window often resets in under a
+    // second, so a brief wait on a 429 is usually all a live conversation
+    // needs. Anything longer goes to the next key — voice can't wait out
+    // a real quota window.
+    for (let attempt = 0; attempt < 2; attempt++) {
+      let groqRes: Response;
+      try {
+        groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${key}`,
+          },
+          body: payload,
+          // If Deepgram cancels the think call (barge-in), release the Groq
+          // request too — otherwise every interruption leaves a phantom call
+          // burning the rate limit for up to 45s.
+          signal: AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]),
+        });
+      } catch (err) {
+        if (request.signal.aborted) {
+          // Deepgram hung up on this think call — do NOT keep calling Groq
+          // for a conversation turn that no longer exists.
+          return new Response(null, { status: 499 });
+        }
+        console.error(`[voice-llm] groq network failure: ${String(err).slice(0, 160)}`);
+        lastStatus = 504;
+        break;
+      }
 
-    if (groqRes.ok) {
-      // Stream the completion (SSE or plain JSON) straight through.
-      return new Response(groqRes.body, {
-        status: 200,
-        headers: {
-          "Content-Type": groqRes.headers.get("content-type") ?? "application/json",
-          "Cache-Control": "no-store",
-        },
-      });
-    }
+      if (groqRes.ok) {
+        // Stream the completion (SSE or plain JSON) straight through.
+        return new Response(groqRes.body, {
+          status: 200,
+          headers: {
+            "Content-Type": groqRes.headers.get("content-type") ?? "application/json",
+            "Cache-Control": "no-store",
+          },
+        });
+      }
 
-    lastStatus = groqRes.status;
-    const errBody = await groqRes.text().catch(() => "");
-    console.error(`[voice-llm] groq error ${groqRes.status}: ${errBody.slice(0, 200)}`);
-    // A malformed request fails on every key — stop immediately.
-    if (groqRes.status === 400 || groqRes.status === 422) break;
+      lastStatus = groqRes.status;
+      const errBody = await groqRes.text().catch(() => "");
+      console.error(`[voice-llm] groq error ${groqRes.status} (attempt ${attempt + 1}): ${errBody.slice(0, 200)}`);
+      // A malformed request fails on every key — stop immediately.
+      if (groqRes.status === 400 || groqRes.status === 422) {
+        return new Response(
+          JSON.stringify({ error: { message: "LLM provider error", type: "upstream_error" } }),
+          { status: 502, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      // 429 with a short reset: wait once, then retry this same key.
+      const retryAfter = Number(groqRes.headers.get("retry-after"));
+      if (groqRes.status === 429 && attempt === 0 && Number.isFinite(retryAfter) && retryAfter > 0 && retryAfter <= 2) {
+        await new Promise((r) => setTimeout(r, retryAfter * 1000 + 150));
+        continue;
+      }
+      break; // next key
+    }
   }
 
   return new Response(

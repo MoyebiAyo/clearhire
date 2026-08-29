@@ -77,7 +77,19 @@ export async function POST(request: Request) {
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
 
   const { candidates } = await buildCopilotContext(supabase, jobId);
-  const contextLines = buildContextLines(candidates);
+  // Deepgram re-sends the whole prompt on every think call (~every turn),
+  // and Groq's free tier allows only 8k tokens/min per key. Cap the detail
+  // to the top of the shortlist and summarize the rest — the function
+  // resolvers still act on ALL candidates server-side.
+  const MAX_VOICE_CANDIDATES = 12;
+  const shown = candidates.slice(0, MAX_VOICE_CANDIDATES);
+  let contextLines = buildContextLines(shown);
+  if (candidates.length > shown.length) {
+    const rest = candidates.slice(shown.length);
+    const totals = rest.map((c) => c.score).filter((s): s is number => typeof s === "number");
+    const range = totals.length ? `, totals between ${Math.min(...totals)} and ${Math.max(...totals)}` : "";
+    contextLines += `\n(+${rest.length} more below rank #${shown.length}${range} — propose actions by score; ask scan_cv_evidence for their CV details.)`;
+  }
   const identityExposed = candidates.filter((c) => c.identity).length;
   console.log(`[blind-audit] voice job=${jobId} candidates=${candidates.length} identityExposed=${identityExposed}`);
 
@@ -85,7 +97,7 @@ export async function POST(request: Request) {
 
 JOB: ${job.title}
 RUBRIC WEIGHTS: skills ${job.weight_skills}%, experience ${job.weight_experience}%, certifications ${job.weight_certifications}%, tools ${job.weight_tools}%
-JOB DESCRIPTION (excerpt): ${job.jd_text.slice(0, 1200)}
+JOB DESCRIPTION (excerpt): ${job.jd_text.slice(0, 700)}
 
 CANDIDATES (blind — de-identified; ranked by current score):
 ${contextLines || "(no applications yet)"}

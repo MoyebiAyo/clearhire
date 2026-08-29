@@ -772,3 +772,17 @@ voice test (Chrome fake mic, audio-node instrumentation before app code,
 drives the actual UI). Asserts TTS buffer sources are connected to the
 destination and started, and binary TTS frames flowed. This is the tool
 that would have caught all three browser-only bugs above.
+
+### Think-call token diet (Groq TPM math)
+Probed the keys directly: openai/gpt-oss-120b allows only 8,000
+tokens/min PER KEY, and Deepgram re-sends the whole system prompt on
+every think call — a big shortlist made each turn cost 2-4k tokens.
+Voice now caps context detail at the top 12 candidates (rest summarized
+as one aggregate line; function resolvers still act on everyone) and
+trims the JD excerpt. /api/voice/llm also waits out 429 Retry-After
+windows up to 2s once per key (Groq's token bucket usually resets in
+<1s) and returns 499 immediately when Deepgram cancels a think call
+(barge-in) instead of fanning the canceled request out to the other
+keys. Ceiling now: 3 keys x 8k TPM = 24k tokens/min for the whole app;
+if a demo still exhausts it, next lever = pin voice to its own model
+(e.g. llama-3.3-70b-versatile) for a separate bucket.
