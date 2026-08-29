@@ -171,7 +171,15 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
           },
           agent: {
             language: "en",
-            listen: { provider: { type: "deepgram", model: "nova-3" } },
+            listen: {
+              provider: {
+                type: "deepgram",
+                model: "nova-3",
+                // A conversational beat before the agent decides you're done —
+                // cutting in at the default feels like interruption.
+                endpointing: 650,
+              },
+            },
             think: {
               provider: { type: "groq", model: "openai/gpt-oss-120b", temperature: 0.4 },
               endpoint: {
