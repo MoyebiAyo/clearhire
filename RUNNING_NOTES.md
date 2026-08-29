@@ -655,3 +655,84 @@ minutes depending on how many documents you uploaded — everything is saved
 as it goes, so it's safe to wait." The shortlist now shows skeletons while
 busy regardless of scoredCount; static empty cards step aside during a run.
 Lines rotate every 2.8s with the fade-swap animation.
+
+## Role requirements: dropped from create form → review-after-create (user decision)
+The create-job form no longer asks for structured requirements — JD only
+(removes the "type it twice" friction). Scoring semantics unchanged: authored
+requirements if present, else AI-derived requirements_cache from the JD.
+New flow: the job page's "How this job is scored" card shows the effective
+criteria with provenance ("Set by you" / "Derived by the AI") and a hint
+before the first score run; "Edit scoring setup" (was "Edit rubric & JD")
+gains an editable criteria list (Mandatory/Preferred rows). PATCH
+/api/jobs/[id] mode 4: { requirements } — validated via the shared
+requirementsSchema; a change clears existing scores (same as a JD change),
+empty array = back to AI derivation.
+
+## Vercel deploy fix: remotion/ excluded from builds
+The Remotion demo-film project (remotion/) was being uploaded and
+type-checked by Vercel, failing on `Cannot find module 'remotion'` (package
+only installed locally). Fixed via tsconfig exclude + .vercelignore — the
+folder never uploads; Remotion keeps building with its own tooling locally.
+
+## Resend batch sender: 429/Retry-After aware (rate-limit hardening)
+Free-tier reality: 10 req/s per team (batch call = 1 request) but 100
+emails/day — the daily cap is the demo-day risk when judges test
+back-to-back on the shared sender. sendEmailBatch now retries transient
+failures (429, 408, 5xx, network) up to 3 attempts per 10-email chunk,
+honoring Retry-After (capped 8s; windows >30s such as exhausted daily
+quota fail fast), with a 35s retry budget to stay inside the 60s
+serverless window. Deterministic 400/422 keeps the per-email fallback.
+Claim-first flows unchanged: rejections/invites never half-complete on
+email failure; failures stay visible in email_log + retryable.
+
+## Voice Copilot: Deepgram Voice Agent + BYO-Groq brain (talk to your shortlist)
+The job-page Copilot now has a Voice mode (mic button next to the input).
+Same blind brain as typed chat — spoken answers in ~1s, barge-in supported,
+and every action still lands as a click-to-confirm card (voice NEVER
+executes anything).
+
+Architecture (all keys stay server-side):
+- STT Nova-3 + TTS Flux `flux-kit-en` + think = Groq `openai/gpt-oss-120b`,
+  all inside one Deepgram Voice Agent session
+  (`wss://agent.deepgram.com/v1/agent/converse`).
+- The browser never sees the Deepgram key: it connects to our Cloudflare
+  Worker (`/ws/agent?ticket=…`), which verifies an HMAC voice ticket
+  (60-min TTL, job-bound) and proxies raw frames to Deepgram with the key
+  in the subprotocol. Grant-JWT tokens were rejected on the agent WS for
+  this account — the worker proxy with the raw key is the workaround.
+- The think step calls back to `/api/voice/llm` (OpenAI-compatible) with
+  the voice ticket as bearer; that route swaps in the real Groq key,
+  force-pins the model, caps 300 tokens, streams SSE through. Deepgram
+  never holds any ClearHire key.
+- `/api/voice/session` mints ticket + blind prompt (spoken rules: 1–3
+  sentences, never speak emails, propose-only) + 3 client-side functions
+  (propose_rejection, propose_exam, scan_cv_evidence). FunctionCallRequest
+  is resolved by `/api/jobs/[id]/voice/function` (shared resolvers from
+  `lib/copilot-brain.ts`) → `{speak, action}`; the action card renders in
+  the SAME chat thread as typed commands.
+- Mic: AudioWorklet (`public/voice-worklet.js`) Float32→Int16 @16kHz;
+  playback queue stops instantly on UserStartedSpeaking (barge-in);
+  KeepAlive every 8s while silent.
+
+Worker-proxy gotchas (cost a day, worth recording):
+- Cloudflare Workers deliver inbound WebSocket binary messages as **Blob**;
+  forwarding a Blob raw makes the runtime stringify it ("[object Blob]"),
+  and Deepgram kills the session with UNPARSABLE_CLIENT_MESSAGE. Every
+  frame is normalized to string | Uint8Array before forwarding.
+- Outbound WS from a Worker must be `fetch("https://…", {Upgrade:
+  "websocket"})` — `wss://` in fetch hangs.
+- Deepgram drops the session after ~10s without audio; the mic-less E2E
+  pumps low-level noise frames (pure zeros don't count).
+- Managed `think.provider.type: "groq"` only knows models on Deepgram's
+  list — `openai/gpt-oss-120b` needs the BYO `think.endpoint` (our proxy).
+
+E2E: `node scripts/test-voice-agent.mjs` — 20 checks, mic-less: signup →
+job + 2 CVs → blind score (95 vs 18) → session mint + guards → real WS →
+"strongest candidate?" (blind answer + TTS bytes) → "reject everyone below
+60" (FunctionCallRequest → real resolver → spoken proposal). Cleans up its
+temp account.
+
+Costs: Deepgram BYO-LLM ≈ $0.05–0.065/connection-minute (free credits
+cover the fest many times over); Groq tokens negligible.
+ROTATE POST-HACKATHON: DEEPGRAM_API_KEY + both Groq keys (they live only
+in Vercel/Worker env, never in the bundle).

@@ -77,3 +77,19 @@ and never show raw provider errors (they're sanitized to human messages).
    tab-switch = strike (3 = forfeited). Submit → the score blends into the
    shortlist automatically (Final = CV 70% + Exam 30% by default).
 Everything the Copilot saw was blind — skills and scores, never names.
+
+## Minute 5 bonus: talk to your shortlist (Voice Copilot)
+> Chrome/Edge, allow the mic. The Deepgram key lives server-side; the
+> browser talks through our worker proxy — nothing sensitive in devtools.
+
+1. On the job page click **Ask AI** → tap the **Voice** orb. The copilot
+   greets you by job title. Ask out loud: *"Which candidate is strongest
+   and why?"* — it answers in ~1s from the BLIND shortlist (skills and
+   scores, never names), and you can interrupt it mid-sentence (barge-in).
+2. *"Who led a team?"* — it scans the raw CV text and cites the evidence.
+3. *"Reject everyone below 60."* — it says it's preparing the proposal and
+   the SAME red confirmation card appears in the chat thread as with typed
+   commands. Nothing moves until a human clicks Confirm. Voice proposes,
+   the card disposes.
+4. Fallback guarantee: if the room is noisy, the typed chat does everything
+   the voice does — same brain, same cards.

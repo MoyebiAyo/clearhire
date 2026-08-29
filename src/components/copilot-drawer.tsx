@@ -3,8 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+  Ear,
   EyeOff,
   GraduationCap,
+  Mic,
+  MicOff,
+  PhoneOff,
   Send,
   ShieldCheck,
   Sparkles,
@@ -16,6 +20,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useVoiceAgent, type VoiceStatus } from "@/hooks/use-voice-agent";
 import { cn } from "@/lib/utils";
 
 /**
@@ -93,7 +98,40 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
   const [examProgress, setExamProgress] = useState<string | null>(null);
   const [rejectBusy, setRejectBusy] = useState<string | null>(null); // msg id
   const [actionBusy, setActionBusy] = useState<string | null>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const voice = useVoiceAgent({
+    jobId,
+    onTranscript: (role, text) => {
+      if (!text.trim()) return;
+      setMsgs((m) => [...m, { id: crypto.randomUUID(), role, content: text.trim() }]);
+    },
+    onFunctionAction: (_name, result) => {
+      // The card is the confirmation — voice never executes anything.
+      const spoken = result.speak ?? "";
+      setMsgs((m) => [
+        ...m,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          content: "",
+          action: (result.action as ActionCard | null) ?? null,
+        },
+      ]);
+      void spoken;
+    },
+    onError: (message) => toast.error(message),
+  });
+
+  // Leaving the drawer always ends the voice session.
+  useEffect(() => {
+    if (!open && voice.status !== "idle") {
+      voice.stop();
+      setVoiceOpen(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -368,9 +406,11 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
                   </div>
                 ) : (
                   <div key={m.id} className="space-y-2">
-                    <p className="whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm leading-relaxed">
-                      {m.content}
-                    </p>
+                    {m.content && (
+                      <p className="whitespace-pre-wrap break-words rounded-2xl rounded-bl-sm bg-muted px-4 py-2.5 text-sm leading-relaxed">
+                        {m.content}
+                      </p>
+                    )}
                     {m.action?.name === "reject_preview" && !m.actionDone && (
                       <RejectActionCard
                         card={m.action}
@@ -407,25 +447,110 @@ export function CopilotDrawer({ jobId, jobTitle }: { jobId: string; jobTitle: st
               )}
             </div>
 
+            {/* Voice panel */}
+            {voiceOpen && (
+              <div className="border-t border-border px-4 py-4">
+                <div className="flex items-center gap-4">
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      aria-label={voice.status === "idle" || voice.status === "error" ? "Start voice" : "Voice active"}
+                      onClick={() => {
+                        if (voice.status === "idle" || voice.status === "error") voice.start();
+                      }}
+                      className={cn(
+                        "flex size-12 items-center justify-center rounded-full transition-all",
+                        voice.status === "speaking" && "bg-primary text-primary-foreground",
+                        voice.status === "thinking" && "bg-warning-soft text-warning",
+                        voice.status === "listening" && "bg-success-soft text-success",
+                        (voice.status === "idle" || voice.status === "error") && "bg-primary text-primary-foreground hover:bg-primary/90",
+                        voice.status === "connecting" && "bg-muted text-muted-foreground animate-pulse"
+                      )}
+                    >
+                      <Mic className="size-5" aria-hidden />
+                    </button>
+                    {voice.status === "listening" && (
+                      <span className="absolute inset-0 animate-ping rounded-full bg-success/30" aria-hidden />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium" aria-live="polite">
+                      {voice.status === "connecting" && "Connecting…"}
+                      {voice.status === "listening" && "Listening — go ahead"}
+                      {voice.status === "thinking" && "Thinking…"}
+                      {voice.status === "speaking" && "Speaking — talk over me any time"}
+                      {(voice.status === "idle" || voice.status === "error") && "Tap the mic to talk"}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Proposals become confirmation cards — your click is always the confirmation.
+                    </p>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      aria-label={voice.muted ? "Unmute microphone" : "Mute microphone"}
+                      onClick={() => voice.setMuted(!voice.muted)}
+                      disabled={voice.status === "idle" || voice.status === "error"}
+                    >
+                      {voice.muted ? <MicOff className="size-4" aria-hidden /> : <Mic className="size-4" aria-hidden />}
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="outline"
+                      aria-label="End voice session"
+                      onClick={() => {
+                        voice.stop();
+                        setVoiceOpen(false);
+                      }}
+                    >
+                      <PhoneOff className="size-4" aria-hidden />
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Input */}
-            <form
-              className="flex items-center gap-2 border-t border-border px-3 py-3 sm:px-4"
-              onSubmit={(e) => {
-                e.preventDefault();
-                send(input);
-              }}
-            >
-              <input
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask, or describe an action…"
-                aria-label="Message the copilot"
-                className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-              <Button type="submit" size="sm" loading={sending} disabled={!input.trim()}>
-                <Send aria-hidden /> Send
+            <div className="flex items-center gap-2 border-t border-border px-3 py-3 sm:px-4">
+              <form
+                className="flex min-w-0 flex-1 items-center gap-2"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  send(input);
+                }}
+              >
+                <input
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder={voiceOpen ? "Voice is on — or type here…" : "Ask, or describe an action…"}
+                  aria-label="Message the copilot"
+                  className="h-10 min-w-0 flex-1 rounded-lg border border-input bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                />
+                <Button type="submit" size="sm" loading={sending} disabled={!input.trim()}>
+                  <Send aria-hidden /> Send
+                </Button>
+              </form>
+              <Button
+                type="button"
+                size="icon"
+                variant={voiceOpen ? "default" : "outline"}
+                aria-label={voiceOpen ? "Hide voice controls" : "Talk to the copilot"}
+                title={voiceOpen ? "Voice controls" : "Talk to the copilot"}
+                className="size-10 shrink-0"
+                onClick={() => {
+                  if (voiceOpen) {
+                    voice.stop();
+                    setVoiceOpen(false);
+                  } else {
+                    setVoiceOpen(true);
+                    if (voice.status === "idle" || voice.status === "error") voice.start();
+                  }
+                }}
+              >
+                {voiceOpen ? <Ear className="size-4" aria-hidden /> : <Mic className="size-4" aria-hidden />}
               </Button>
-            </form>
+            </div>
           </div>
         </div>
       )}

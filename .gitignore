@@ -34,3 +34,13 @@ next-env.d.ts
 test-cvs/
 test-ids.txt
 run*.json
+
+# Remotion renders and local media
+remotion/out/
+remotion/public/media/
+remotion/node_modules/
+
+# Local test artifacts
+e2e_state.json
+.graphify/
+__pycache__/

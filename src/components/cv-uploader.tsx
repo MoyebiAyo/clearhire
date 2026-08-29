@@ -83,7 +83,7 @@ export function CvUploader({
     postFiles.forEach((f) => form.append("files", f));
     if (emails) form.append("emails", JSON.stringify(emails));
 
-    const res = await fetch(`/api/jobs/${jobId}/cvs`, { method: "POST", body: form });
+    const res = await fetch(`/api/jobs/${jobId}/cv-upload`, { method: "POST", body: form });
     const body = await res.json();
     if (!res.ok) {
       toast.error(body.error ?? "Upload failed. Please try again.");

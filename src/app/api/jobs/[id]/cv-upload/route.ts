@@ -14,6 +14,9 @@ const MAX_TOTAL_MB = 100;
  * Per file: shared ingest pipeline (text extraction → private bucket →
  * candidate + application + staged raw text). One bad file never aborts
  * the batch; the response carries a per-file report.
+ *
+ * NOTE: this route is re-deployed explicitly — a Vercel upload-cache miss
+ * once shipped a build without it.
  */
 export async function POST(
   request: Request,
