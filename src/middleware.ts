@@ -66,7 +66,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
+  // Static assets (incl. public/*.js — the voice worklet is fetched by
+  // audioWorklet.addModule and must never hit the auth redirect).
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|login|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|login|api|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|txt|xml|js|css|map|woff|woff2|ttf)$).*)",
   ],
 };

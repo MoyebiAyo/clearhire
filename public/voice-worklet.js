@@ -1,9 +1,12 @@
 /**
  * ClearHire voice mic capture — AudioWorklet processor.
  *
- * Receives Float32 mic frames (device sample rate), converts to Int16 LE,
- * downsamples to the target rate, and posts fixed-size PCM chunks to the
- * main thread as ArrayBuffers (wired to the Deepgram agent socket).
+ * Receives Float32 mic frames (device sample rate), decimates to the
+ * target rate (16kHz), converts to Int16 LE, and posts fixed-size PCM
+ * chunks to the main thread as ArrayBuffers (wired to the Deepgram agent
+ * socket). Nearest-sample decimation: one output per `ratio` inputs, so
+ * output length tracks real time — stretching here makes Deepgram's STT
+ * hear slowed garbage and transcribe nothing.
  *
  * Config via port.postMessage({ type: "init", targetSampleRate }).
  */
@@ -26,25 +29,24 @@ class VoiceCapture extends AudioWorkletProcessor {
     };
   }
 
+  pushSample(f32) {
+    const sample = Math.max(-1, Math.min(1, f32));
+    this.buffer[this.pos++] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+    if (this.pos >= this.buffer.length) {
+      const out = this.buffer.slice(0, this.pos);
+      this.pos = 0;
+      this.port.postMessage(out.buffer, [out.buffer]);
+    }
+  }
+
   process(inputs) {
-    const input = inputs[0];
-    if (!input || input.length === 0) return true;
-    // Mix down to mono.
-    const ch = input[0];
+    const ch = inputs[0]?.[0];
+    if (!ch || ch.length === 0) return true;
     for (let i = 0; i < ch.length; i++) {
-      this.fill += this.ratio;
-      const n = Math.floor(this.fill);
-      this.fill -= n;
-      for (let k = 0; k < n; k++) {
-        let sample = this.muted ? 0 : ch[i];
-        // clamp + convert
-        sample = Math.max(-1, Math.min(1, sample));
-        this.buffer[this.pos++] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
-        if (this.pos >= this.buffer.length) {
-          // post a copy — the buffer is reused
-          this.port.postMessage(this.buffer.slice(0, this.pos).buffer, [this.buffer.slice(0, this.pos).buffer]);
-          this.pos = 0;
-        }
+      this.fill += 1;
+      if (this.fill >= this.ratio) {
+        this.fill -= this.ratio;
+        this.pushSample(this.muted ? 0 : ch[i]);
       }
     }
     return true;

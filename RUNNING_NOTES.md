@@ -736,3 +736,15 @@ Costs: Deepgram BYO-LLM ≈ $0.05–0.065/connection-minute (free credits
 cover the fest many times over); Groq tokens negligible.
 ROTATE POST-HACKATHON: DEEPGRAM_API_KEY + both Groq keys (they live only
 in Vercel/Worker env, never in the bundle).
+
+### Browser-only voice bugs the mic-less E2E couldn't see (both fixed)
+1. **Middleware ate the worklet.** The auth middleware's matcher excluded
+   `_next` and images but not `public/*.js`, so `audioWorklet.addModule
+   ("/voice-worklet.js")` chased a 307 to /login (even WITH a session
+   cookie) and voice never started. Static asset extensions (js/css/map/
+   fonts) are now excluded from the matcher.
+2. **Inverted decimation stretched the mic.** The worklet emitted ~ratio
+   samples per INPUT sample instead of one per ratio inputs — Deepgram
+   got 48kHz audio 9x too fast at 1/3 pitch and could transcribe nothing
+   (agent stays silent; greeting still plays). Now: one output per ratio
+   inputs, verified in Node (3s 48kHz → 3.000s 16kHz, pitch preserved).

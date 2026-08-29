@@ -61,6 +61,7 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
   const mutedRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const playHeadRef = useRef(0);
+  const liveSourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const micStreamRef = useRef<MediaStream | null>(null);
   const workletNodeRef = useRef<AudioWorkletNode | null>(null);
   const sourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
@@ -77,9 +78,14 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
   }, []);
 
   const stopPlayback = useCallback(() => {
-    // Barge-in: drop everything queued the instant the user speaks.
+    // Barge-in: kill every scheduled/playing buffer the instant the user speaks.
     const ctx = audioCtxRef.current;
-    if (ctx) playHeadRef.current = Math.max(playHeadRef.current, ctx.currentTime);
+    if (!ctx) return;
+    for (const src of liveSourcesRef.current) {
+      try { src.stop(); src.disconnect(); } catch { /* already ended */ }
+    }
+    liveSourcesRef.current.clear();
+    playHeadRef.current = ctx.currentTime;
   }, []);
 
   const playAudioChunk = useCallback((data: ArrayBuffer) => {
@@ -95,10 +101,12 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
     for (let i = 0; i < frames.length; i++) ch[i] = frames[i] / 0x8000;
     const src = ctx.createBufferSource();
     src.buffer = buf;
-    // Sequential scheduling; barge-in moves the playhead forward, orphaning queued buffers.
+    // Sequential scheduling; barge-in stops live sources outright.
     const startAt = Math.max(ctx.currentTime, playHeadRef.current) + 0.005;
     src.start(startAt);
     playHeadRef.current = startAt + buf.duration;
+    liveSourcesRef.current.add(src);
+    src.onended = () => liveSourcesRef.current.delete(src);
   }, []);
 
   const sendJson = useCallback((obj: unknown) => {
@@ -131,9 +139,21 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
       });
       workletNodeRef.current = node;
       node.port.postMessage({ type: "init", targetSampleRate: 16000 });
+      // Mic frames → socket. Assigned before the socket opens so no frames
+      // are dropped; the readyState guard holds them back until we're live.
+      node.port.onmessage = (e: MessageEvent) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN && !mutedRef.current) {
+          wsRef.current.send(e.data as ArrayBuffer);
+        }
+      };
       sourceRef.current = ctx.createMediaStreamSource(mic);
       sourceRef.current.connect(node);
-      // (The worklet's output is consumed via port messages — not wired to destination.)
+      // The worklet's output is consumed via port messages — a zero-gain
+      // sink keeps the graph pulled so process() always runs in Chrome.
+      const silentSink = ctx.createGain();
+      silentSink.gain.value = 0;
+      node.connect(silentSink);
+      silentSink.connect(ctx.destination);
 
       // 3. Open the agent socket through our Cloudflare worker proxy —
       // the ticket is the credential; the Deepgram key stays in the worker.
@@ -166,12 +186,7 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
           },
         });
 
-        // Mic frames → socket.
-        node.port.onmessage = (e: MessageEvent) => {
-          if (ws.readyState === WebSocket.OPEN && !mutedRef.current) {
-            ws.send(e.data as ArrayBuffer);
-          }
-        };
+        // Mic frames → socket wiring happens right after worklet creation.
 
         // KeepAlive while the mic is muted or idle (server closes silent sessions).
         keepAliveRef.current = setInterval(() => {
@@ -311,13 +326,14 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
     audioCtxRef.current?.close().catch(() => undefined);
     audioCtxRef.current = null;
     playHeadRef.current = 0;
+    liveSourcesRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stop = useCallback(() => {
     activeRef.current = false;
     try {
-      sendJson({ type: "Close" });
+      sendJson({ type: "CloseStream" });
     } catch {
       // socket may already be closing
     }
@@ -347,7 +363,7 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
     return () => {
       if (activeRef.current) {
         try {
-          sendJson({ type: "Close" });
+          sendJson({ type: "CloseStream" });
         } catch {
           // ignore
         }
