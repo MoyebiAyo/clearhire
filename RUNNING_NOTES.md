@@ -760,3 +760,15 @@ non-OK/Network error, failing fast on 400/422; (2) AbortSignal.any ties the
 Groq request to the incoming request, so a canceled think call no longer
 leaves a phantom call burning the rate limit for 45s. Verified: 8/8
 parallel calls 200 post-deploy (was 4/6).
+3. **TTS was scheduled into silence.** `playAudioChunk` created buffer
+   sources and `start()`-ed them but never `connect()`-ed them to
+   `ctx.destination` — Web Audio nodes are inaudible until connected.
+   Text transcripts worked, so the session LOOKED alive; only the
+   speaker path was dead. Fixed + a `ctx.resume()` guard for autoplay
+   suspension.
+
+New guard: `scripts/test-voice-browser.mjs` — a real headless-Chromium
+voice test (Chrome fake mic, audio-node instrumentation before app code,
+drives the actual UI). Asserts TTS buffer sources are connected to the
+destination and started, and binary TTS frames flowed. This is the tool
+that would have caught all three browser-only bugs above.

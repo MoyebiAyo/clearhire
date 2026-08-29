@@ -94,6 +94,8 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
       ctx = new AudioContext({ sampleRate: 24000 });
       audioCtxRef.current = ctx;
     }
+    // A suspended context would queue frames silently (autoplay policy).
+    if (ctx.state === "suspended") ctx.resume().catch(() => undefined);
     const frames = new Int16Array(data);
     if (frames.length === 0) return;
     const buf = ctx.createBuffer(1, frames.length, 24000);
@@ -101,6 +103,8 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
     for (let i = 0; i < frames.length; i++) ch[i] = frames[i] / 0x8000;
     const src = ctx.createBufferSource();
     src.buffer = buf;
+    // No sound exists without this — an unconnected node is silent.
+    src.connect(ctx.destination);
     // Sequential scheduling; barge-in stops live sources outright.
     const startAt = Math.max(ctx.currentTime, playHeadRef.current) + 0.005;
     src.start(startAt);
