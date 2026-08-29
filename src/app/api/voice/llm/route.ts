@@ -39,31 +39,65 @@ export async function POST(request: Request) {
     body.max_tokens = 300;
   }
 
-  const groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(45_000),
-  });
-
-  if (!groqRes.ok) {
-    const errBody = await groqRes.text().catch(() => "");
-    console.error(`[voice-llm] groq error ${groqRes.status}: ${errBody.slice(0, 200)}`);
-    return new Response(
-      JSON.stringify({ error: { message: "LLM provider error", type: "upstream_error" } }),
-      { status: 502, headers: { "Content-Type": "application/json" } }
-    );
+  // Same key chain as lib/ai.ts. Barge-in and the typed Copilot share the
+  // primary key, so bursts of concurrent think calls hit Groq's rate limit
+  // (verified: 2 of 6 parallel calls 429). Voice can't wait out a
+  // Retry-After — fail over to the next key immediately instead.
+  const keyChain = [
+    process.env.GROQ_API_KEY,
+    process.env.GROQ_FALLBACK_API_KEY,
+    process.env.GROQ_FALLBACK_API_KEY_2,
+  ].filter((k): k is string => Boolean(k));
+  if (keyChain.length === 0) {
+    return new Response(JSON.stringify({ error: "LLM provider not configured." }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  // Stream the completion (SSE or plain JSON) straight through.
-  return new Response(groqRes.body, {
-    status: 200,
-    headers: {
-      "Content-Type": groqRes.headers.get("content-type") ?? "application/json",
-      "Cache-Control": "no-store",
-    },
-  });
+  const payload = JSON.stringify(body);
+  let lastStatus = 502;
+  for (const key of keyChain) {
+    let groqRes: Response;
+    try {
+      groqRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${key}`,
+        },
+        body: payload,
+        // If Deepgram cancels the think call (barge-in), release the Groq
+        // request too — otherwise every interruption leaves a phantom call
+        // burning the rate limit for up to 45s.
+        signal: AbortSignal.any([request.signal, AbortSignal.timeout(45_000)]),
+      });
+    } catch (err) {
+      console.error(`[voice-llm] groq network failure: ${String(err).slice(0, 160)}`);
+      lastStatus = 504;
+      continue;
+    }
+
+    if (groqRes.ok) {
+      // Stream the completion (SSE or plain JSON) straight through.
+      return new Response(groqRes.body, {
+        status: 200,
+        headers: {
+          "Content-Type": groqRes.headers.get("content-type") ?? "application/json",
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    lastStatus = groqRes.status;
+    const errBody = await groqRes.text().catch(() => "");
+    console.error(`[voice-llm] groq error ${groqRes.status}: ${errBody.slice(0, 200)}`);
+    // A malformed request fails on every key — stop immediately.
+    if (groqRes.status === 400 || groqRes.status === 422) break;
+  }
+
+  return new Response(
+    JSON.stringify({ error: { message: "LLM provider error", type: "upstream_error" } }),
+    { status: 502, headers: { "Content-Type": "application/json" } }
+  );
 }

@@ -748,3 +748,15 @@ in Vercel/Worker env, never in the bundle).
    got 48kHz audio 9x too fast at 1/3 pitch and could transcribe nothing
    (agent stays silent; greeting still plays). Now: one output per ratio
    inputs, verified in Node (3s 48kHz → 3.000s 16kHz, pitch preserved).
+
+### "Failed to think" — Groq rate limits under barge-in bursts (fixed)
+Root cause found by bursting the prod proxy: 6 concurrent think calls → 2
+429s → 502 → Deepgram's "Failed to think. Please check your agent.think
+settings." Barge-in cancels a turn and starts a new one while the typed
+Copilot shares the same GROQ_API_KEY — bursts are normal voice-session
+behavior. Two fixes in /api/voice/llm: (1) fail over instantly through the
+same key chain as lib/ai.ts (GROQ_FALLBACK_API_KEY, _KEY_2) on any
+non-OK/Network error, failing fast on 400/422; (2) AbortSignal.any ties the
+Groq request to the incoming request, so a canceled think call no longer
+leaves a phantom call burning the rate limit for 45s. Verified: 8/8
+parallel calls 200 post-deploy (was 4/6).
