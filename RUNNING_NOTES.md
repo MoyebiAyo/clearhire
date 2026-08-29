@@ -786,3 +786,26 @@ windows up to 2s once per key (Groq's token bucket usually resets in
 keys. Ceiling now: 3 keys x 8k TPM = 24k tokens/min for the whole app;
 if a demo still exhausts it, next lever = pin voice to its own model
 (e.g. llama-3.3-70b-versatile) for a separate bucket.
+
+### "Star star": markdown pronounced by TTS + the real Groq ceiling (TPD)
+gpt-oss leaks markdown ("**bold**" → spoken "star star") and streams its
+chain-of-thought in delta.reasoning (283 of 300 max_tokens went to
+thinking — the spoken answer got squeezed). Fixes: /api/voice/llm forces
+reasoning_effort "low" (cap now 400), and a fragment-aware sanitizer
+rewrites every SSE content delta before Deepgram speaks it — strips
+**/*/`/heading/bullet markup, maps "#12" → "number 12". Naive per-delta
+sanitizing FAILED because deltas are token fragments ("#" arrives alone);
+the sanitizer holds a line-start marker run (and a trailing "#") until
+the next delta resolves it. Verified by forcing markdown-heavy output
+through prod: content comes out clean and complete.
+
+Discovered while E2E-testing the fix: Groq free tier is 200k tokens PER
+DAY per org, not just per-minute. Extraction 504'd because ai.ts kept
+retrying the TPD-exhausted primary (20s backoff cap x5) inside the 60s
+function window instead of moving to the healthy fallback org. ai.ts now
+breaks to the next provider on any 429 whose Retry-After exceeds 25s.
+Also: chatJSON defaults reasoning_effort to "low" (gpt-oss medium CoT was
+burning wall-clock and tokens on every structured call). Budget: ~3 orgs
+x 200k tokens/day; demo-day advice — run bulk scoring in batches, and if
+a daily org runs dry mid-demo, voice/extraction now fail over on their
+own within seconds.

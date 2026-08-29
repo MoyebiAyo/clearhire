@@ -104,6 +104,8 @@ interface ChatJsonOptions {
   purpose: string;
   model?: string;
   maxTokens?: number;
+  /** gpt-oss chain-of-thought depth ("low" default; "medium" where it shows). */
+  reasoningEffort?: "low" | "medium" | "high";
 }
 
 /** Runs a JSON-mode chat completion and returns the parsed object. */
@@ -127,6 +129,13 @@ export async function chatJSON<T = unknown>(opts: ChatJsonOptions): Promise<T> {
         const msg = err instanceof Error ? err.message : String(err);
         failures.push(`${provider.name}#${attempt}: ${msg}`);
         if (isTransient(err) && attempt < 4) {
+          // A long Retry-After means the provider's window (e.g. Groq's
+          // 200k tokens/day) is exhausted — sleeping 20s and retrying the
+          // same dead provider burns the function's time budget. Move on
+          // to the next provider immediately.
+          if (err instanceof AiError && err.status === 429 && (err.retryAfter ?? 0) > 25) {
+            break;
+          }
           await sleep(backoffMs(err, attempt));
           continue;
         }
@@ -149,6 +158,11 @@ async function callOnce<T>(provider: Provider, opts: ChatJsonOptions): Promise<T
       temperature: 0,
       response_format: { type: "json_object" },
       max_tokens: opts.maxTokens ?? 2000,
+      // gpt-oss defaults to medium chain-of-thought, which burns wall-clock
+      // and tokens on every structured call (extraction 504'd under load).
+      // Low is plenty for JSON-in/JSON-out tasks; pass "medium" per call
+      // where deliberation visibly matters.
+      reasoning_effort: opts.reasoningEffort ?? "low",
       messages: [{ role: "user", content: opts.user }],
     }),
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),

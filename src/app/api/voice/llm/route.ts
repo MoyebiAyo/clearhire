@@ -5,6 +5,102 @@ export const maxDuration = 60;
 const ALLOWED_MODEL = "openai/gpt-oss-120b";
 
 /**
+ * The TTS speaks exactly what the model streams, and gpt-oss leaks
+ * markdown ("**bold**" is pronounced "star star") even when told not to.
+ * Scrub spoken-hostile markup from the stream BEFORE Deepgram sees it:
+ * emphasis/backtick markers are removed outright, bullets and headings at
+ * line start are unwrapped, and "#12" becomes "number 12".
+ *
+ * Deltas are token fragments — "#" or "-" arrive alone, so patterns can't
+ * be matched within one delta. The sanitizer holds a line-start prefix
+ * (and a trailing "#") until the next fragment makes it resolvable.
+ */
+function createSpeechSanitizer() {
+  let atLineStart = true;
+  let pending = "";
+  const process = (src: string, atStart: boolean): string => {
+    if (atStart) {
+      const lead = src.match(/^(\s*)([-–•]|\*|#{1,6}|[-=_*]{3,})(\s+|$)/);
+      if (lead) src = src.slice(lead[0].length);
+    }
+    const out = src.replace(/[*`]+/g, "");
+    if (out.endsWith("#")) {
+      // "#"+digit may split across deltas — hold the "#" one turn.
+      pending = "#";
+      return out.slice(0, -1);
+    }
+    return out.replace(/#(?=\d)/g, "number ");
+  };
+  return {
+    push(fragment: string): string {
+      const src = pending + fragment;
+      pending = "";
+      // A line-start run of only marker characters may still be an
+      // unfinished bullet/heading — hold it until we can judge it.
+      if (atLineStart && src.length > 0 && /^[\s\-*#–•=_]*$/.test(src)) {
+        pending = src;
+        return "";
+      }
+      const out = process(src, atLineStart);
+      atLineStart = out.endsWith("\n") || (atLineStart && out.length === 0);
+      return out;
+    },
+    flush(): string {
+      const rest = pending;
+      pending = "";
+      return rest.replace(/[*`#]+/g, " ").replace(/^\s+/, "");
+    },
+  };
+}
+
+/** Wrap Groq's SSE stream so every content delta is spoken-safe. */
+function scrubbedStream(upstream: ReadableStream<Uint8Array>): ReadableStream<Uint8Array> {
+  const decoder = new TextDecoder();
+  const encoder = new TextEncoder();
+  const sanitize = createSpeechSanitizer();
+  let buf = "";
+
+  const scrubLine = (line: string): string => {
+    if (!line.startsWith("data: ") || line.includes("[DONE]")) return line;
+    try {
+      const msg = JSON.parse(line.slice(6)) as {
+        choices?: { delta?: { content?: string | null } }[];
+      };
+      for (const choice of msg.choices ?? []) {
+        if (typeof choice.delta?.content === "string" && choice.delta.content.length > 0) {
+          choice.delta.content = sanitize.push(choice.delta.content);
+        }
+      }
+      return "data: " + JSON.stringify(msg);
+    } catch {
+      return line;
+    }
+  };
+
+  return upstream.pipeThrough(
+    new TransformStream<Uint8Array, Uint8Array>({
+      transform(chunk, controller) {
+        buf += decoder.decode(chunk, { stream: true });
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
+        for (const line of lines) controller.enqueue(encoder.encode(scrubLine(line) + "\n"));
+      },
+      flush(controller) {
+        if (buf) controller.enqueue(encoder.encode(scrubLine(buf) + "\n"));
+        const tail = sanitize.flush();
+        if (tail) {
+          controller.enqueue(
+            encoder.encode(
+              "data: " + JSON.stringify({ choices: [{ delta: { content: tail } }] }) + "\n\n"
+            )
+          );
+        }
+      },
+    })
+  );
+}
+
+/**
  * POST /api/voice/llm — OpenAI-compatible passthrough for the Deepgram
  * voice agent's "think" step. Deepgram's servers call this with the
  * session's voice ticket; we validate it, swap in the real Groq key, and
@@ -35,9 +131,13 @@ export async function POST(request: Request) {
   // Whitelist the model — the voice brain is always ours.
   body.model = ALLOWED_MODEL;
   // Keep agent turns snappy; huge completions aren't useful when spoken.
-  if (typeof body.max_tokens !== "number" || (body.max_tokens as number) > 300) {
-    body.max_tokens = 300;
+  if (typeof body.max_tokens !== "number" || (body.max_tokens as number) > 400) {
+    body.max_tokens = 400;
   }
+  // gpt-oss streams its chain-of-thought in delta.reasoning, which eats the
+  // max_tokens budget BEFORE the spoken answer (observed: 283 of 300 tokens
+  // went to thinking). Voice needs short final answers, not deep reasoning.
+  body.reasoning_effort = "low";
 
   // Same key chain as lib/ai.ts. Barge-in and the typed Copilot share the
   // primary key, so bursts of concurrent think calls hit Groq's rate limit
@@ -89,8 +189,9 @@ export async function POST(request: Request) {
       }
 
       if (groqRes.ok) {
-        // Stream the completion (SSE or plain JSON) straight through.
-        return new Response(groqRes.body, {
+        // Stream the completion straight through, with markdown scrubbed
+        // from every delta so the TTS never pronounces markup.
+        return new Response(scrubbedStream(groqRes.body!), {
           status: 200,
           headers: {
             "Content-Type": groqRes.headers.get("content-type") ?? "application/json",
