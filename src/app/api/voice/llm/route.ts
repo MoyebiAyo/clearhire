@@ -19,11 +19,13 @@ function createSpeechSanitizer() {
   let atLineStart = true;
   let pending = "";
   const process = (src: string, atStart: boolean): string => {
+    // Emphasis/code markers die globally FIRST — otherwise a bold-wrapped
+    // heading ("**# Title") defeats the line-start match below.
+    let out = src.replace(/[*`]+/g, "");
     if (atStart) {
-      const lead = src.match(/^(\s*)([-–•]|\*|#{1,6}|[-=_*]{3,})(\s+|$)/);
-      if (lead) src = src.slice(lead[0].length);
+      const lead = out.match(/^(\s*)([-–•]|#{1,6}|[-=_]{3,})(\s+|$)/);
+      if (lead) out = out.slice(lead[0].length);
     }
-    const out = src.replace(/[*`]+/g, "");
     if (out.endsWith("#")) {
       // "#"+digit may split across deltas — hold the "#" one turn.
       pending = "#";

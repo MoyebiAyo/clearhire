@@ -809,3 +809,20 @@ burning wall-clock and tokens on every structured call). Budget: ~3 orgs
 x 200k tokens/day; demo-day advice — run bulk scoring in batches, and if
 a daily org runs dry mid-demo, voice/extraction now fail over on their
 own within seconds.
+
+### Think proxy moved into the Cloudflare worker (cold starts gone)
+/api/voice/session now returns the worker URL for the think endpoint:
+`https://clearhire-scheduler.clearhire-scheduler.workers.dev/voice/llm`.
+The worker (already warm, already holding the secrets) does everything
+the Vercel route did: ticket verify, model pin, reasoning_effort low,
+max_tokens cap, 3-key failover with short Retry-After waits, 499 on
+client-cancel, and the fragment-aware markdown sanitizer on the SSE
+stream. Measured: worker TTFB 218ms warm / 790ms cold vs Vercel
+1506ms; total 780ms vs 2001ms on the same streamed call. The Vercel
+/api/voice/llm route stays deployed as a one-line rollback target —
+the sanitizer there was synced with a fix for bold-wrapped headings
+("**# Title" defeated the line-start strip; emphasis markers are now
+removed before the heading/bullet match). Worker secrets added:
+GROQ_API_KEY, GROQ_FALLBACK_API_KEY, GROQ_FALLBACK_API_KEY_2. NOTE:
+wrangler secret put on Windows Git Bash needs the value WITHOUT a
+trailing newline (printf '%s', not echo) or the upload silently fails.

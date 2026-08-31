@@ -119,15 +119,17 @@ HOW TO SPEAK:
 - If you truly can't help, say so in one sentence and suggest the typed chat.`;
 
   // Voice credentials: the browser connects to the Cloudflare worker's WS
-  // proxy with this ticket; the worker holds the real Deepgram key. (The
-  // /v1/auth/grant token path was tested and rejected on the agent socket
-  // for this account, so the proxy is the credential instead.)
-  const proxyOrigin = "wss://clearhire-scheduler.clearhire-scheduler.workers.dev";
+  // proxy with this ticket; the worker holds the real Deepgram key. The
+  // think proxy also lives on the worker (no Vercel cold starts mid-
+  // conversation). (The /v1/auth/grant token path was tested and rejected
+  // on the agent socket for this account, so the proxy is the credential
+  // instead.) /api/voice/llm stays on Vercel as a rollback target.
+  const workerOrigin = "https://clearhire-scheduler.clearhire-scheduler.workers.dev";
 
   return NextResponse.json({
-    wsProxyUrl: `${proxyOrigin}/ws/agent`,
+    wsProxyUrl: `wss://clearhire-scheduler.clearhire-scheduler.workers.dev/ws/agent`,
     voiceTicket: createVoiceTicket(user.id, jobId),
-    llmProxyUrl: `${new URL(request.url).origin}/api/voice/llm`,
+    llmProxyUrl: `${workerOrigin}/voice/llm`,
     session: {
       prompt,
       functions: VOICE_FUNCTIONS,
