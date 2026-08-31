@@ -56,7 +56,7 @@ export function HiddenGems({ jobId, jobStatus }: { jobId: string; jobStatus: str
             <Gem className="size-4 text-primary" aria-hidden /> Hidden gems
           </p>
           <p className="text-xs text-muted-foreground">
-            The AI re-reads CVs ranked outside the top 5 for evidence the rubric may have underweighted.
+            The AI re-reads CVs ranked outside the top 5 for evidence your set rubric may have underweighted.
           </p>
         </div>
         <Button size="sm" variant="outline" onClick={run} loading={busy} disabled={disabled || busy}>
