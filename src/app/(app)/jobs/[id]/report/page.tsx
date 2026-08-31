@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 import { createClient } from "@/lib/supabase/server";
-import { Printer } from "lucide-react";
+import { PrintButton } from "@/components/print-button";
 
 const fmt = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—";
@@ -93,13 +93,7 @@ export default async function JobReportPage({ params }: { params: Promise<{ id: 
         >
           ← Back to job
         </Link>
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="inline-flex h-9 items-center gap-1.5 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-        >
-          <Printer className="size-4" aria-hidden /> Print / Save as PDF
-        </button>
+        <PrintButton />
       </div>
 
       <div className="print-area space-y-6 text-[13px] leading-relaxed text-foreground">
