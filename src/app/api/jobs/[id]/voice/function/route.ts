@@ -105,6 +105,35 @@ export async function POST(
     return NextResponse.json({ speak, action: null, evidence: scan });
   }
 
+  if (name === "propose_email") {
+    const kind = ["offer", "interview", "exam", "reminder"].includes(String(args.kind))
+      ? String(args.kind)
+      : "reminder";
+    const ranks = Array.isArray(args.targetRanks)
+      ? args.targetRanks.filter((rank): rank is number => typeof rank === "number" && Number.isInteger(rank))
+      : [];
+    const selected = candidates.filter((candidate) => ranks.includes(candidate.rank));
+    if (selected.length === 0) {
+      return NextResponse.json({
+        speak: "I couldn't match that candidate — say it as Candidate number N, like Candidate number 2.",
+        action: null,
+      });
+    }
+    const resolved = {
+      name: "email_send",
+      kind,
+      count: selected.length,
+      candidates: selected.map((candidate) => ({
+        applicationId: candidate.applicationId,
+        rank: candidate.rank,
+        identity: candidate.identity,
+      })),
+    };
+    const ranksSpoken = selected.map((c) => `#${c.rank}`).join(", #");
+    const speak = `I've prepared the ${kind} email for candidate ${ranksSpoken}. Check the card on screen and confirm to send.`;
+    return NextResponse.json({ speak, action: resolved });
+  }
+
   return NextResponse.json(
     { speak: "That action isn't available over voice yet.", action: null },
     { status: 400 }

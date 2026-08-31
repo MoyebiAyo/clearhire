@@ -349,6 +349,40 @@ if (fcReq) {
   check("agent spoke the proposal", spokeIt, `spoken audio: ${state.audioBytes - audioBefore2} bytes`);
 }
 
+// Q3: email request -> propose_email -> real resolver -> email_send card.
+console.log("== Q3: email proposal via function ==");
+console.log("  >> Inject Q3");
+ws.send(JSON.stringify({ type: "InjectUserMessage", content: "Send Candidate number 1 the offer email." }));
+const emDeadline = Date.now() + 60000;
+let emReq = null;
+let emRetried = false;
+while (Date.now() < emDeadline && !emReq) {
+  await sleep(500);
+  emReq = state.functionCalls.find((f) => f.name === "propose_email") ?? null;
+  if (!emReq && !emRetried && Date.now() > emDeadline - 35000) {
+    emRetried = true;
+    console.log("  >> Inject Q3 (explicit tool nudge)");
+    ws.send(JSON.stringify({ type: "InjectUserMessage", content: "Use the propose_email function to prepare that offer email." }));
+  }
+}
+check("FunctionCallRequest -> propose_email", Boolean(emReq), JSON.stringify(emReq?.arguments ?? state.functionCalls.map((f) => f.name)));
+
+if (emReq) {
+  let args = {};
+  try { args = JSON.parse(emReq.arguments ?? "{}"); } catch {}
+  const emRes = await http("POST", `${BASE}/api/jobs/${JOB_ID}/voice/function`, {
+    headers: authHeaders,
+    body: JSON.stringify({ name: emReq.name, arguments: args }),
+  });
+  const emBody = emRes.json ?? {};
+  const emAction = emBody.action ?? {};
+  check(
+    "resolver: email_send card matches drawer type",
+    emRes.status === 200 && emAction.name === "email_send" && emAction.count === 1 && Boolean(emAction.candidates?.[0]?.applicationId) && /card/i.test(emBody.speak ?? ""),
+    `${emRes.status} kind=${emAction.kind} count=${emAction.count} speak="${(emBody.speak ?? "").slice(0, 90)}"`
+  );
+}
+
 ws.close();
 
 // ── Cleanup: delete temp user via admin path ─────────────────────────────

@@ -105,8 +105,11 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
     src.buffer = buf;
     // No sound exists without this — an unconnected node is silent.
     src.connect(ctx.destination);
-    // Sequential scheduling; barge-in stops live sources outright.
-    const startAt = Math.max(ctx.currentTime, playHeadRef.current) + 0.005;
+    // Sequential scheduling; barge-in stops live sources outright. At the
+    // start of a stream, prime ~150ms of buffer first — otherwise the first
+    // network jitter gap plays as a crackle/shake in the voice.
+    const isStreamStart = playHeadRef.current <= ctx.currentTime + 0.02;
+    const startAt = Math.max(ctx.currentTime, playHeadRef.current) + (isStreamStart ? 0.15 : 0.005);
     src.start(startAt);
     playHeadRef.current = startAt + buf.duration;
     liveSourcesRef.current.add(src);
@@ -193,7 +196,7 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
               prompt: sess.session.prompt,
               functions: sess.session.functions,
             },
-            speak: { provider: { type: "deepgram", model: "aura-2-thalia-en" } },
+            speak: { provider: { type: "deepgram", model: "aura-2-thalia-en", speed: 1.05 } },
             greeting: sess.session.greeting,
           },
         });

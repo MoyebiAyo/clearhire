@@ -826,3 +826,19 @@ removed before the heading/bullet match). Worker secrets added:
 GROQ_API_KEY, GROQ_FALLBACK_API_KEY, GROQ_FALLBACK_API_KEY_2. NOTE:
 wrangler secret put on Windows Git Bash needs the value WITHOUT a
 trailing newline (printf '%s', not echo) or the upload silently fails.
+
+### User-reported voice issues: pace, off-topic compliance, phantom cards
+1. "Slow and shaky" voice: Aura-2 speak provider now runs speed 1.05
+   (validated live; docs allow 0.7-1.5 for Aura), and playback primes
+   ~150ms of buffer at each stream start so network jitter stops playing
+   as crackle mid-sentence.
+2. Off-topic compliance: the model complied with "write me code" despite
+   the topic rule. Voice prompt now has a hard STAY ON SUBJECT section
+   (explicit refusal examples, one-sentence decline).
+3. Phantom cards: asking to "send an email" made it claim a draft was on
+   screen when no email function existed over voice. Added propose_email
+   (offer/interview/exam/reminder + targetRanks) to VOICE_FUNCTIONS; the
+   resolver produces the SAME email_send card the drawer already
+   confirms — click still executes. Plus a NEVER INVENT CAPABILITIES OR
+   UI rule: a card may only be claimed when a function was actually
+   called this turn. E2E extended to 22 checks (email leg included).
