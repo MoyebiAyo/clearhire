@@ -7,6 +7,8 @@ import { ExamScheduler } from "@/components/exam-scheduler";
 import { CopilotDrawer } from "@/components/copilot-drawer";
 import { JobActions } from "@/components/job-actions";
 import { JobStage } from "@/components/job-stage";
+import { HiddenGems } from "@/components/hidden-gems";
+import { FileText } from "lucide-react";
 import { RubricEditor } from "@/components/rubric-editor";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
@@ -292,6 +294,14 @@ export default async function JobDetailPage({
             <Badge variant={job.status === "open" ? "success" : "secondary"}>
               {job.status}
             </Badge>
+            <a
+              href={`/jobs/${job.id}/report`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-muted"
+            >
+              <FileText className="size-4" aria-hidden /> Report
+            </a>
             <CopilotDrawer jobId={job.id} jobTitle={job.title} />
             <JobActions jobId={job.id} status={job.status} />
             <RubricEditor
@@ -456,6 +466,8 @@ export default async function JobDetailPage({
           ))}
         </div>
       </details>
+
+      <HiddenGems jobId={job.id} jobStatus={job.status} />
 
       <JobStage
         jobId={job.id}

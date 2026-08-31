@@ -321,3 +321,82 @@ export async function buildEmailPreviews(
   }
   return previews;
 }
+
+/**
+ * Hidden gems — the AI "second look". Takes candidates ranked OUTSIDE the
+ * shortlist's top ranks, reads their raw CV text, and surfaces overlooked
+ * evidence the rubric may have underweighted. One chunked AI call, same
+ * token-caps as cvScan; deterministic rank→candidate mapping in code.
+ */
+export interface HiddenGem {
+  rank: number;
+  total: number | null;
+  quote: string;
+  reason: string;
+}
+
+export async function findHiddenGems(
+  supabase: SupabaseClient,
+  jobId: string,
+  beyondRank = 5
+): Promise<{ gems: HiddenGem[]; scanned: number; total: number } | null> {
+  const { candidates } = await buildCopilotContext(supabase, jobId);
+  const eligible = candidates.filter((c) => c.status !== "rejected" && c.score !== null);
+  if (eligible.length <= beyondRank) return null;
+  const ranked = [...eligible].sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+  const overlooked = ranked.slice(beyondRank).slice(0, 8);
+  const total = eligible.length;
+
+  const admin = createAdminClient();
+  const { data: rows } = await admin
+    .from("cv_extractions")
+    .select("application_id, raw_text")
+    .in(
+      "application_id",
+      overlooked.map((c) => c.applicationId)
+    );
+  const textByApp = new Map((rows ?? []).map((r) => [r.application_id, r.raw_text ?? ""]));
+
+  const MAX_CHUNK_CHARS = 24_000;
+  const PER_DOC = 3_500;
+  const chunks: string[] = [];
+  let current = "";
+  for (const c of overlooked) {
+    const doc = `CANDIDATE #${c.rank} (total score ${c.score ?? "?"}):\n${(textByApp.get(c.applicationId) ?? "").slice(0, PER_DOC)}`;
+    if (current.length > 0 && current.length + doc.length > MAX_CHUNK_CHARS) {
+      chunks.push(current);
+      current = "";
+    }
+    current += (current ? "\n\n" : "") + doc;
+  }
+  if (current) chunks.push(current);
+  const doc = chunks[0];
+
+  const out = await chatJSON<{ gems?: { rank?: number; quote?: string; reason?: string }[] }>({
+    user: `A recruiter's AI shortlist ranks candidates by a rubric (skills, experience, certifications, tools). Below are candidates ranked OUTSIDE the top ${beyondRank}. Read each CV excerpt and surface up to 4 "hidden gems": candidates whose text shows genuinely strong evidence the rubric may have underweighted (leadership, shipped products, scale, rare depth, initiative). Only cite text that is actually present; skip anyone unremarkable.
+Return strict JSON: {"gems": [{"rank": <candidate number>, "quote": "<verbatim short quote>", "reason": "<one sentence why this matters>"}]}. If nothing qualifies, return {"gems": []}.
+
+${doc}`,
+    purpose: "hidden-gems",
+    maxTokens: 900,
+  });
+
+  const byRank = new Map(overlooked.map((c) => [c.rank, c]));
+  const seenRank = new Set<number>();
+  const gems: HiddenGem[] = (out.gems ?? [])
+    .map((g) => {
+      const rank = Number(g.rank);
+      const match = byRank.get(rank);
+      if (!match || typeof g.quote !== "string" || !g.quote.trim()) return null;
+      return {
+        rank,
+        total: match.score,
+        quote: String(g.quote).trim().slice(0, 220),
+        reason: String(g.reason ?? "").trim().slice(0, 220),
+      };
+    })
+    .filter((g): g is HiddenGem => g !== null)
+    .slice(0, 4);
+
+  return { gems, scanned: overlooked.length, total };
+}

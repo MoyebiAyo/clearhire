@@ -864,3 +864,23 @@ subject line. Blindness preserved: unrevealed candidates greet as
 "there"; the real name is inserted only at send. Drawer renders the
 draft (To: Candidate #N, subject, scrollable body) above the confirm
 button. E2E extended to 23 checks incl. draft presence.
+
+### Demo-day wow features: insights, hidden gems, process report
+1. **AI insights** (candidate detail drawer): "What the AI saw" — the
+   exact blind scoring payload (rank, skills/tools/certs chips,
+   sub-scores, gaps, rationale) with the note that no name/email/school/
+   age was ever in it, plus the candidate story: heuristic evidence
+   quotes from the raw CV text and a deterministic suggested next action
+   (reject <60, exam invite >=70, interview after exam, offer >=85...).
+   API: GET /api/jobs/[id]/applications/[appId]/insights (AI-free —
+   quotes are a keyword scan so the drawer opens instantly).
+2. **Hidden gems** ("Run second look" card on the job page): one chunked
+   AI call re-reads the raw CV text of candidates ranked beyond #5 and
+   surfaces up to 4 overlooked gems (verbatim quote + why it matters,
+   deduped per candidate). API: POST /api/jobs/[id]/hidden-gems.
+3. **Process report** (/jobs/[id]/report, linked from the job header):
+   one-page print-to-PDF — funnel counts, rubric weights, average blind
+   score, top-10 with abridged rationales, and the fairness statement
+   (blind scoring, reveal-only identities, human-confirmed cards). Print
+   CSS strips the app shell; the judge takeaway doubles as evidence of
+   process rigor.

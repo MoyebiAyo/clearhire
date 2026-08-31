@@ -171,7 +171,7 @@ export function JobStage({
         onExtract={() => run("extract")}
         onScore={() => run("score")}
       />
-      <Shortlist rows={rows} weights={weights} busy={running} examWeights={examWeights} />
+      <Shortlist rows={rows} weights={weights} busy={running} examWeights={examWeights} jobId={jobId} />
     </div>
   );
 }

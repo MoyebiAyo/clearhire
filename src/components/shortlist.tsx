@@ -17,6 +17,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CandidateInsights } from "@/components/candidate-insights";
 import { Card, CardContent } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Modal } from "@/components/ui/modal";
@@ -127,11 +128,13 @@ export function Shortlist({
   weights,
   busy,
   examWeights = null,
+  jobId,
 }: {
   rows: ShortlistRow[];
   weights: RubricWeights;
   busy: RunProgress | null;
   examWeights?: { cv: number; exam: number } | null;
+  jobId: string;
 }) {
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const [blindMode, setBlindMode] = useState(false);
@@ -452,6 +455,7 @@ export function Shortlist({
           row={openRow}
           weights={weights}
           revealed={isRevealed(openRow)}
+          jobId={jobId}
           onClose={() => setOpenId(null)}
           onDownload={() => downloadCv(openRow)}
         />
@@ -792,12 +796,14 @@ function DetailDrawer({
   row,
   weights,
   revealed,
+  jobId,
   onClose,
   onDownload,
 }: {
   row: ShortlistRow;
   weights: RubricWeights;
   revealed: boolean;
+  jobId: string;
   onClose: () => void;
   onDownload: () => void;
 }) {
@@ -860,6 +866,10 @@ function DetailDrawer({
             connect it to a person.
           </p>
         )}
+
+        <div className="mt-6">
+          <CandidateInsights jobId={jobId} applicationId={row.id} />
+        </div>
 
         {s ? (
           <div className="mt-6 space-y-5">
