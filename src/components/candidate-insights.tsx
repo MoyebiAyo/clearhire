@@ -158,7 +158,7 @@ export function CandidateInsights({ jobId, applicationId }: { jobId: string; app
               {hardGaps.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-destructive">Hard gaps</p>
-                  <div className="mt-1"><Chips items={hardGaps.map((g) => g.requirement)} tone="destructive" /></div>
+                  <div className="mt-1"><Chips items={hardGaps.map((g) => (g.missing_skill ? `${g.requirement} — missing: ${g.missing_skill}` : g.requirement))} tone="destructive" /></div>
                 </div>
               )}
               {niceGaps.length > 0 && (

@@ -899,43 +899,6 @@ function DetailDrawer({
               </div>
             </div>
 
-            <div>
-              <h4 className="text-sm font-medium">Gaps vs job requirements</h4>
-              {s.gaps.length === 0 ? (
-                <p className="mt-1 text-sm text-success">Meets every requirement.</p>
-              ) : (
-                <ul className="mt-2 space-y-2">
-                  {s.gaps.map((g, i) => (
-                    <li key={i} className="rounded-lg border border-border p-2.5 text-sm">
-                      <div className="flex flex-wrap items-start justify-between gap-2">
-                        <span className="min-w-0 flex-1 break-words">{g.requirement}</span>
-                        <Badge
-                          variant={g.severity === "hard" ? "destructive" : "secondary"}
-                          className="shrink-0"
-                        >
-                          {g.severity === "hard" ? "Hard requirement" : "Nice-to-have"}
-                        </Badge>
-                      </div>
-                      {g.missing_skill && (
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Missing: {g.missing_skill}
-                        </p>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            {s.rationale && (
-              <div>
-                <h4 className="text-sm font-medium">Why this score</h4>
-                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-                  {s.rationale}
-                </p>
-              </div>
-            )}
-
             {row.interview && (
               <div className="rounded-lg border border-border p-3">
                 <h4 className="text-sm font-medium">Interview</h4>
