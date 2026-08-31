@@ -842,3 +842,13 @@ trailing newline (printf '%s', not echo) or the upload silently fails.
    confirms — click still executes. Plus a NEVER INVENT CAPABILITIES OR
    UI rule: a card may only be claimed when a function was actually
    called this turn. E2E extended to 22 checks (email leg included).
+
+### "Still cracking" — the 5ms gap at every frame seam (fixed)
+playAudioChunk scheduled each TTS chunk at playHead + 0.005s. Deepgram
+streams ~25ms frames, so every frame boundary carried a 5ms silence gap —
+a click at each seam, ~17% duty loss, heard as constant crackle through
+every utterance (and it survived the voice swap because it was ours, not
+the voice model's). Chunks now tile EXACTLY (startAt = playHead, no
+epsilon); the 200ms prime at stream start is the only intentional
+spacing. Lesson: an epsilon "to be safe" between audio buffers is a bug,
+not safety.
