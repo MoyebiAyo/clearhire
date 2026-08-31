@@ -692,7 +692,7 @@ and every action still lands as a click-to-confirm card (voice NEVER
 executes anything).
 
 Architecture (all keys stay server-side):
-- STT Nova-3 + TTS Flux `flux-kit-en` + think = Groq `openai/gpt-oss-120b`,
+- STT Nova-3 + TTS Aura-2 `aura-2-thalia-en` (was Flux `flux-kit-en` — Aura-2 is the more natural generation; tested live before the swap) + think = Groq `openai/gpt-oss-120b`,
   all inside one Deepgram Voice Agent session
   (`wss://agent.deepgram.com/v1/agent/converse`).
 - The browser never sees the Deepgram key: it connects to our Cloudflare

@@ -193,7 +193,7 @@ export function useVoiceAgent({ jobId, onTranscript, onFunctionAction, onStatus,
               prompt: sess.session.prompt,
               functions: sess.session.functions,
             },
-            speak: { provider: { type: "deepgram", version: "v2", model: "flux-kit-en" } },
+            speak: { provider: { type: "deepgram", model: "aura-2-thalia-en" } },
             greeting: sess.session.greeting,
           },
         });

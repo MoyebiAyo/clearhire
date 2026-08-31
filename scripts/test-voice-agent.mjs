@@ -251,7 +251,7 @@ ws.onopen = () => {
         prompt: sessCfg.prompt,
         functions: sessCfg.functions,
       },
-      speak: { provider: { type: "deepgram", version: "v2", model: "flux-kit-en" } },
+      speak: { provider: { type: "deepgram", model: "aura-2-thalia-en" } },
       greeting: sessCfg.greeting,
     },
   }));
