@@ -852,3 +852,15 @@ the voice model's). Chunks now tile EXACTLY (startAt = playHead, no
 epsilon); the 200ms prime at stream start is the only intentional
 spacing. Lesson: an epsilon "to be safe" between audio buffers is a bug,
 not safety.
+
+### Email cards now carry a reviewable draft (WYSIWYG confirm)
+"Review the card" was hollow: the email_send card showed only kind +
+count, with the actual email composed invisibly at send time. The
+deterministic composer moved to lib/email-compose.ts and a shared
+buildEmailPreviews() now attaches the real subject + body to the card at
+PROPOSAL time (typed + voice, same template instance the send route
+uses — deterministic, so preview === sent). Voice speak also states the
+subject line. Blindness preserved: unrevealed candidates greet as
+"there"; the real name is inserted only at send. Drawer renders the
+draft (To: Candidate #N, subject, scrollable body) above the confirm
+button. E2E extended to 23 checks incl. draft presence.

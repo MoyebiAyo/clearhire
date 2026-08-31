@@ -1,18 +1,9 @@
 import { NextResponse } from "next/server";
 import { emailConfigured, logEmail, sendEmail } from "@/lib/email";
+import { composeEmail, type EmailKind } from "@/lib/email-compose";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { one } from "@/lib/utils";
-
-type EmailKind = "offer" | "interview" | "exam" | "reminder";
-
-function compose(kind: EmailKind, name: string, title: string, org: string, details: { interview?: string | null; location?: string | null; schedule?: string | null; exam?: string | null }) {
-  const greeting = name || "there";
-  if (kind === "offer") return { subject: `Offer update for ${title}`, text: `Hi ${greeting},\n\nWe are pleased to let you know that your application for ${title} has progressed to the offer stage. ${org} will follow up with the offer details and next steps.\n\nWarm regards,\n${org}` };
-  if (kind === "exam") return { subject: `Your assessment link for ${title}`, text: `Hi ${greeting},\n\nPlease complete the assessment for ${title} here:\n${details.exam || "Your assessment link is in your invitation."}\n\nPlease follow the instructions on the assessment page.\n\nRegards,\n${org}` };
-  if (kind === "reminder") return { subject: `Reminder: next step for ${title}`, text: `Hi ${greeting},\n\nThis is a friendly reminder about your next step for ${title}.${details.interview ? ` Your interview is scheduled for ${details.interview}.` : ""}\n\n${details.location || ""}\n${details.schedule ? `Scheduling link: ${details.schedule}` : ""}\n\nRegards,\n${org}` };
-  return { subject: `Interview invitation for ${title}`, text: `Hi ${greeting},\n\nWe would like to continue your application for ${title}. Please choose a suitable interview time here:\n${details.schedule || "The scheduling link is in your invitation."}\n\nRegards,\n${org}` };
-}
 
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: jobId } = await params;
@@ -34,7 +25,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const candidate = one<{ name: string | null; email: string }>(app.candidates); if (!candidate?.email) continue;
     const interview = one<{ schedule_token: string | null; scheduled_time: string | null; location_or_link: string | null }>(app.interviews);
     const exam = one<{ token: string }>(app.exam_invites);
-    const message = compose(kind, candidate.name || candidate.email.split("@")[0], job.title, recruiter?.org_name || "the hiring team", {
+    const message = composeEmail(kind, candidate.name || candidate.email.split("@")[0], job.title, recruiter?.org_name || "the hiring team", {
       interview: interview?.scheduled_time ? new Date(interview.scheduled_time).toUTCString() : null,
       location: interview?.location_or_link,
       schedule: interview?.schedule_token ? `${origin}/schedule/${interview.schedule_token}` : null,

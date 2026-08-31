@@ -4,10 +4,12 @@ import { chatJSON } from "@/lib/ai";
 import {
   buildContextLines,
   buildCopilotContext,
+  buildEmailPreviews,
   cvScan,
   resolveExamSetup,
   resolveRejectPreview,
 } from "@/lib/copilot-brain";
+import type { EmailKind } from "@/lib/email-compose";
 import { createClient } from "@/lib/supabase/server";
 import { confirmedEmailIntent, validCopilotStage } from "@/lib/copilot-action";
 
@@ -207,7 +209,15 @@ Respond with JSON only: {"answer": string (what you say to the recruiter; if pro
     const selected = candidates.filter((candidate) => ranks.includes(candidate.rank));
     if (action.name === "email_send") {
       const kind = ["offer", "interview", "exam", "reminder"].includes(String(args.kind)) ? String(args.kind) : "reminder";
-      resolved = { name: "email_send", kind, count: selected.length, candidates: selected.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank, identity: candidate.identity })) };
+      const selectedCandidates = selected.map((candidate) => ({ applicationId: candidate.applicationId, rank: candidate.rank, identity: candidate.identity }));
+      // Reviewable draft on the card (same template the send route sends).
+      const { data: recruiter } = await supabase.from("recruiters").select("org_name").eq("id", user.id).maybeSingle();
+      const preview = await buildEmailPreviews(
+        supabase,
+        { jobId: id, jobTitle: job.title, origin: new URL(request.url).origin, kind: kind as EmailKind, org: recruiter?.org_name || "the hiring team" },
+        selectedCandidates
+      );
+      resolved = { name: "email_send", kind, count: selected.length, candidates: selectedCandidates, preview };
     } else if (action.name === "exam_resend") {
       const eligible = selected.filter((candidate) => candidate.exam?.status === "invited" || candidate.exam?.status === "in_progress");
       if (eligible.length === 0) {

@@ -381,6 +381,12 @@ if (emReq) {
     emRes.status === 200 && emAction.name === "email_send" && emAction.count === 1 && Boolean(emAction.candidates?.[0]?.applicationId) && /card/i.test(emBody.speak ?? ""),
     `${emRes.status} kind=${emAction.kind} count=${emAction.count} speak="${(emBody.speak ?? "").slice(0, 90)}"`
   );
+  const pv = emAction.preview?.[0];
+  check(
+    "email card carries a reviewable draft",
+    Boolean(pv?.subject && pv?.text) && pv.subject.length > 5 && pv.text.length > 40 && /Hi /.test(pv.text),
+    `subject="${(pv?.subject ?? "").slice(0, 60)}" textLen=${pv?.text?.length ?? 0}`
+  );
 }
 
 ws.close();

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { chatJSON } from "@/lib/ai";
+import { composeEmail, type EmailKind } from "@/lib/email-compose";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { one } from "@/lib/utils";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -273,4 +274,50 @@ Respond JSON only: {"matches": [{"rank": number, "found": true, "quote": string}
   const seenRank = new Set<number>();
   const unique = matches.filter((m) => !seenRank.has(m.rank) && seenRank.add(m.rank));
   return { matches: unique, scanned: Math.min(scanned, total), total };
+}
+
+/**
+ * Proposal-time email previews. Composes the EXACT deterministic template
+ * the send route will send (lib/email-compose), so "review the card" is
+ * real: the recruiter reads subject + body before confirming. Blindness
+ * is preserved — unrevealed candidates greet as "there"; the real name is
+ * only inserted at send time.
+ */
+export interface CopilotEmailPreview {
+  rank: number;
+  subject: string;
+  text: string;
+}
+
+export async function buildEmailPreviews(
+  supabase: SupabaseClient,
+  opts: { jobId: string; jobTitle: string; origin: string; kind: EmailKind; org: string },
+  selected: { applicationId: string; rank: number; identity: string | null }[]
+): Promise<CopilotEmailPreview[]> {
+  if (selected.length === 0) return [];
+  const ids = selected.map((s) => s.applicationId);
+  const { data: apps } = await supabase
+    .from("applications")
+    .select("id, interviews(schedule_token, scheduled_time, location_or_link), exam_invites(token)")
+    .eq("job_id", opts.jobId)
+    .in("id", ids);
+  const byId = new Map<string, {
+    interviews: { schedule_token: string | null; scheduled_time: string | null; location_or_link: string | null }[] | null;
+    exam_invites: { token: string }[] | null;
+  }>((apps ?? []).map((a) => [a.id, a]));
+  const previews: CopilotEmailPreview[] = [];
+  for (const s of selected) {
+    const app = byId.get(s.applicationId);
+    if (!app) continue;
+    const interview = one<{ schedule_token: string | null; scheduled_time: string | null; location_or_link: string | null }>(app.interviews);
+    const exam = one<{ token: string }>(app.exam_invites);
+    const message = composeEmail(opts.kind, s.identity ?? "", opts.jobTitle, opts.org, {
+      interview: interview?.scheduled_time ? new Date(interview.scheduled_time).toUTCString() : null,
+      location: interview?.location_or_link,
+      schedule: interview?.schedule_token ? `${opts.origin}/schedule/${interview.schedule_token}` : null,
+      exam: exam?.token ? `${opts.origin}/exam/${exam.token}` : null,
+    });
+    previews.push({ rank: s.rank, subject: message.subject, text: message.text });
+  }
+  return previews;
 }

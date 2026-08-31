@@ -66,6 +66,7 @@ interface OperationalCard {
   tone?: string;
   status?: string;
   kind?: "offer" | "interview" | "exam" | "reminder";
+  preview?: { rank: number; subject: string; text: string }[];
 }
 
 type ActionCard = RejectCard | ExamCard | OperationalCard;
@@ -567,6 +568,19 @@ function OperationalActionCard({ card, busy, onRun }: { card: OperationalCard; b
         <Badge variant="secondary">Pending your confirm</Badge>
       </div>
       <p className="text-xs text-muted-foreground">{card.count} candidate{card.count === 1 ? "" : "s"} selected from the ranked shortlist. The action will use the existing server-side authorization checks.</p>
+      {card.name === "email_send" && card.preview && card.preview.length > 0 && (
+        <div className="space-y-2">
+          {card.preview.slice(0, 3).map((p) => (
+            <div key={p.rank} className="rounded-lg border border-border bg-background px-3 py-2">
+              <p className="text-xs font-medium">To: Candidate #{p.rank} · <span className="font-normal">{p.subject}</span></p>
+              <p className="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-xs leading-relaxed text-muted-foreground">{p.text}</p>
+            </div>
+          ))}
+          {card.preview.length > 3 && (
+            <p className="text-xs text-muted-foreground">+{card.preview.length - 3} more drafts — identical template, one per candidate.</p>
+          )}
+        </div>
+      )}
       <Button className="w-full" loading={busy} disabled={busy || card.count === 0} onClick={onRun}><ShieldCheck aria-hidden /> Confirm {label.toLowerCase()}</Button>
     </div>
   );

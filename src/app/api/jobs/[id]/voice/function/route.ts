@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
-import { buildCopilotContext, cvScan, resolveExamSetup, resolveRejectPreview } from "@/lib/copilot-brain";
+import { buildCopilotContext, buildEmailPreviews, cvScan, resolveExamSetup, resolveRejectPreview } from "@/lib/copilot-brain";
+import type { EmailKind } from "@/lib/email-compose";
 import { createClient } from "@/lib/supabase/server";
 
 export const maxDuration = 60;
@@ -129,9 +130,23 @@ export async function POST(
         identity: candidate.identity,
       })),
     };
+    // A real, reviewable draft on the card — same template the send route
+    // composes. Unrevealed candidates greet as "there" (blindness holds).
+    const { data: recruiter } = await supabase
+      .from("recruiters")
+      .select("org_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    const previews = await buildEmailPreviews(
+      supabase,
+      { jobId: id, jobTitle: job.title, origin: new URL(request.url).origin, kind: kind as EmailKind, org: recruiter?.org_name || "the hiring team" },
+      resolved.candidates
+    );
+    const withPreview = { ...resolved, preview: previews };
+    const firstSubject = previews[0]?.subject;
     const ranksSpoken = selected.map((c) => `#${c.rank}`).join(", #");
-    const speak = `I've prepared the ${kind} email for candidate ${ranksSpoken}. Check the card on screen and confirm to send.`;
-    return NextResponse.json({ speak, action: resolved });
+    const speak = `I've prepared the ${kind} email for candidate ${ranksSpoken}${firstSubject ? ` — subject: ${firstSubject}` : ""}. The full draft is on the card on screen; review it and confirm to send.`;
+    return NextResponse.json({ speak, action: withPreview });
   }
 
   return NextResponse.json(
